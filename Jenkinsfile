@@ -87,19 +87,24 @@ pipeline {
         
         stage('Deploy to EC2') {
             steps {
-                sshagent(['ec2-ssh-key']) {
+                sshagent(credentials: ['ec2-user']) {
                     sh '''
-                        # Tạo tên repo từ tên người dùng Docker Hub thực tế nếu DOCKER_HUB_REPO không được cấu hình
-                        ACTUAL_REPO=${DOCKER_HUB_REPO:-${DOCKER_HUB_CREDS_USR}/flask-app}
+                        # Kiểm tra SSH agent
+                        ssh-add -l
                         
-                        ssh -o StrictHostKeyChecking=no ec2-user@${EC2_IP} "
-                            echo $DOCKER_HUB_CREDS_PSW | docker login -u $DOCKER_HUB_CREDS_USR --password-stdin
-                            docker pull ${ACTUAL_REPO}:latest
-                            docker stop flask-container || true
-                            docker rm flask-container || true
-                            docker run -d -p 5000:5000 --name flask-container ${ACTUAL_REPO}:latest
-                            docker system prune -f
-                        "
+                        # Thực hiện deploy bằng scp/ssh tới EC2 server
+                        # Bỏ qua kiểm tra host key để tránh lỗi
+                        ssh -o StrictHostKeyChecking=no ec2-user@your-ec2-instance-ip '
+                            # Pull image từ Docker Hub
+                            docker pull thong0710/flask-app:latest
+                            
+                            # Dừng container cũ nếu đang chạy
+                            docker stop flask-app || true
+                            docker rm flask-app || true
+                            
+                            # Chạy container mới
+                            docker run -d -p 5000:5000 --name flask-app thong0710/flask-app:latest
+                        '
                     '''
                 }
             }
