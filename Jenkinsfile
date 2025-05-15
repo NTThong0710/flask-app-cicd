@@ -51,37 +51,37 @@ pipeline {
             }
         }
         
-        stage('SonarCloud Analysis') {
-            steps {
-                withCredentials([string(credentialsId: 'sonarcloud-token', variable: 'SONAR_TOKEN')]) {
-                    sh '''
-                        # Sử dụng phiên bản SonarScanner mới nhất tương thích với Java 17
-                        export SONAR_SCANNER_VERSION=4.8.0.2856
+        // stage('SonarCloud Analysis') {
+        //     steps {
+        //         withCredentials([string(credentialsId: 'sonarcloud-token', variable: 'SONAR_TOKEN')]) {
+        //             sh '''
+        //                 # Sử dụng phiên bản SonarScanner mới nhất tương thích với Java 17
+        //                 export SONAR_SCANNER_VERSION=4.8.0.2856
                         
-                        # Tải SonarScanner
-                        wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
+        //                 # Tải SonarScanner
+        //                 wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
                         
-                        # Giải nén
-                        unzip -q sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
+        //                 # Giải nén
+        //                 unzip -q sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
                         
-                        # Cấu hình thông tin JDK cho SonarScanner (tùy chọn)
-                        export JAVA_HOME=/usr/lib/jvm/temurin-17.0.15+6
+        //                 # Cấu hình thông tin JDK cho SonarScanner (tùy chọn)
+        //                 export JAVA_HOME=/usr/lib/jvm/temurin-17.0.15+6
                         
-                        # Chạy SonarScanner với cấu hình đầy đủ
-                        ./sonar-scanner-${SONAR_SCANNER_VERSION}-linux/bin/sonar-scanner \
-                            -Dsonar.host.url=https://sonarcloud.io \
-                            -Dsonar.login=${SONAR_TOKEN} \
-                            -Dsonar.projectKey=NTThong0710_flask-app-cicd \
-                            -Dsonar.organization=ntthong0710 \
-                            -Dsonar.sources=. \
-                            -Dsonar.python.coverage.reportPaths=coverage.xml \
-                            -Dsonar.python.xunit.reportPath=test-results.xml \
-                            -Dsonar.python.version=3.9 \
-                            -Dsonar.exclusions=**/*test*,venv/**,**/__pycache__/**
-                    '''
-                }
-            }
-        }
+        //                 # Chạy SonarScanner với cấu hình đầy đủ
+        //                 ./sonar-scanner-${SONAR_SCANNER_VERSION}-linux/bin/sonar-scanner \
+        //                     -Dsonar.host.url=https://sonarcloud.io \
+        //                     -Dsonar.login=${SONAR_TOKEN} \
+        //                     -Dsonar.projectKey=NTThong0710_flask-app-cicd \
+        //                     -Dsonar.organization=ntthong0710 \
+        //                     -Dsonar.sources=. \
+        //                     -Dsonar.python.coverage.reportPaths=coverage.xml \
+        //                     -Dsonar.python.xunit.reportPath=test-results.xml \
+        //                     -Dsonar.python.version=3.9 \
+        //                     -Dsonar.exclusions=**/*test*,venv/**,**/__pycache__/**
+        //             '''
+        //         }
+        //     }
+        // }
         
         stage('Build Docker Image') {
             steps {
