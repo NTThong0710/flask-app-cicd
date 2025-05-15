@@ -86,41 +86,32 @@ pipeline {
         }
         
         stage('Deploy to EC2') {
-            steps {
-                sshagent(credentials: ['ec2-ssh-key']) {
-                    sh '''
-                        # Kiểm tra SSH agent
-                        ssh-add -l
-                        
-                        # Thực hiện deploy bằng scp/ssh tới EC2 server
-                        # Bỏ qua kiểm tra host key để tránh lỗi
-                        ssh -o StrictHostKeyChecking=no ec2-user@your-ec2-instance-ip '
-                            # Pull image từ Docker Hub
-                            docker pull thong0710/flask-app:latest
-                            
-                            # Dừng container cũ nếu đang chạy
-                            docker stop flask-app || true
-                            docker rm flask-app || true
-                            
-                            # Chạy container mới
-                            docker run -d -p 5000:5000 --name flask-app thong0710/flask-app:latest
-                        '
-                    '''
+                    steps {
+                        sshagent(credentials: ['ec2-ssh-key']) {
+                            sh '''
+                                # Sử dụng cờ -t để đảm bảo terminal được cấp phát đúng cách
+                                ssh -o StrictHostKeyChecking=no -t ec2-user@your-ec2-instance-ip '
+                                    docker pull ${DOCKER_HUB_CREDS_USR}/flask-app:latest
+                                    docker stop flask-app || true
+                                    docker rm flask-app || true
+                                    docker run -d -p 5000:5000 --name flask-app ${DOCKER_HUB_CREDS_USR}/flask-app:latest
+                                '
+                            '''
+                        }
+                    }
+                }
+            }
+            
+            post {
+                always {
+                    sh 'docker system prune -f'
+                    cleanWs()
+                }
+                success {
+                    echo 'Pipeline executed successfully!'
+                }
+                failure {
+                    echo 'Pipeline execution failed!'
                 }
             }
         }
-    }
-    
-    post {
-        always {
-            sh 'docker system prune -f'
-            cleanWs()
-        }
-        success {
-            echo 'Pipeline executed successfully!'
-        }
-        failure {
-            echo 'Pipeline execution failed!'
-        }
-    }
-}
