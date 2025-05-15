@@ -4,7 +4,7 @@ pipeline {
     environment {
         DOCKER_IMAGE = 'flask-app'
         DOCKER_TAG = "${env.BUILD_NUMBER}"
-        EC2_IP = '3.0.59.46'  // Thay bằng IP EC2 thực tế của bạn
+        EC2_IP = '3.0.59.46' 
         DOCKER_HUB_CREDS = credentials('docker-hub-credentials')
         DOCKER_HUB_REPO = 'thong0710/flask-app'  // Thay thế bằng username Docker Hub thực tế
     }
@@ -84,23 +84,22 @@ pipeline {
                 '''
             }
         }
-        
         stage('Deploy to EC2') {
-                    steps {
-                        sshagent(credentials: ['ec2-ssh-key']) {
-                            sh '''
-                                # Sử dụng cờ -t để đảm bảo terminal được cấp phát đúng cách
-                                ssh -o StrictHostKeyChecking=no -t ec2-user@your-ec2-instance-ip '
-                                    docker pull ${DOCKER_HUB_CREDS_USR}/flask-app:latest
-                                    docker stop flask-app || true
-                                    docker rm flask-app || true
-                                    docker run -d -p 5000:5000 --name flask-app ${DOCKER_HUB_CREDS_USR}/flask-app:latest
-                                '
-                            '''
-                        }
-                    }
+            steps {
+                sshagent(credentials: ['ec2-ssh-key']) {
+                    sh '''
+                        ssh -o StrictHostKeyChecking=no -t ec2-user@3.0.59.46 '
+                            docker pull thong0710/flask-app:latest
+                            docker stop flask-app || true
+                            docker rm flask-app || true
+                            docker run -d -p 5000:5000 --name flask-app thong0710/flask-app:latest
+                        '
+                    '''
                 }
             }
+        }
+
+    }
             
             post {
                 always {
