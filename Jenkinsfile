@@ -55,7 +55,18 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'sonarcloud-token', variable: 'SONAR_TOKEN')]) {
                     sh '''
-                        export SONAR_SCANNER_VERSION=4.6.2.2472
+                        # Kiểm tra phiên bản Java
+                        JAVA_VERSION=$(java -version 2>&1 | head -1 | cut -d'"' -f2 | sed 's/^\\([0-9]*\\).*/\\1/')
+                        
+                        if [ "$JAVA_VERSION" -ge "17" ]; then
+                            # Nếu Java 17 hoặc cao hơn, sử dụng phiên bản mới nhất
+                            export SONAR_SCANNER_VERSION=4.6.2.2472
+                        else
+                            # Nếu Java 11, sử dụng phiên bản tương thích
+                            export SONAR_SCANNER_VERSION=4.5.0.2216
+                        fi
+                        
+                        echo "Sử dụng SonarScanner phiên bản: $SONAR_SCANNER_VERSION"
                         wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
                         unzip -q sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
                         ./sonar-scanner-${SONAR_SCANNER_VERSION}-linux/bin/sonar-scanner \
