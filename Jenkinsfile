@@ -55,8 +55,8 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'sonarcloud-token', variable: 'SONAR_TOKEN')]) {
                     sh '''
-                        # Sử dụng SonarScanner 4.5.0.2216 - phiên bản tương thích với Java 11
-                        export SONAR_SCANNER_VERSION=4.5.0.2216
+                        # Sử dụng phiên bản SonarScanner mới nhất tương thích với Java 17
+                        export SONAR_SCANNER_VERSION=4.8.0.2856
                         
                         # Tải SonarScanner
                         wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
@@ -64,12 +64,20 @@ pipeline {
                         # Giải nén
                         unzip -q sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
                         
-                        # Chạy SonarScanner
+                        # Cấu hình thông tin JDK cho SonarScanner (tùy chọn)
+                        export JAVA_HOME=/usr/lib/jvm/temurin-17.0.15+6
+                        
+                        # Chạy SonarScanner với cấu hình đầy đủ
                         ./sonar-scanner-${SONAR_SCANNER_VERSION}-linux/bin/sonar-scanner \
                             -Dsonar.host.url=https://sonarcloud.io \
                             -Dsonar.login=${SONAR_TOKEN} \
                             -Dsonar.projectKey=NTThong0710_flask-app-cicd \
-                            -Dsonar.organization=ntthong0710
+                            -Dsonar.organization=ntthong0710 \
+                            -Dsonar.sources=. \
+                            -Dsonar.python.coverage.reportPaths=coverage.xml \
+                            -Dsonar.python.xunit.reportPath=test-results.xml \
+                            -Dsonar.python.version=3.9 \
+                            -Dsonar.exclusions=**/*test*,venv/**,**/__pycache__/**
                     '''
                 }
             }
