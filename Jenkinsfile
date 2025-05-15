@@ -55,12 +55,17 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'sonarcloud-token', variable: 'SONAR_TOKEN')]) {
                     sh '''
+                        # Đảm bảo wget đã được cài đặt
+                        which wget || apt-get update && apt-get install -y wget
+                        
                         export SONAR_SCANNER_VERSION=4.7.0.2747
                         wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
                         unzip -q sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
                         ./sonar-scanner-${SONAR_SCANNER_VERSION}-linux/bin/sonar-scanner \
                             -Dsonar.host.url=https://sonarcloud.io \
-                            -Dsonar.login=${SONAR_TOKEN}
+                            -Dsonar.login=${SONAR_TOKEN} \
+                            -Dsonar.projectKey=NTThong0710_flask-app-cicd \
+                            -Dsonar.organization=ntthong0710
                     '''
                 }
             }
