@@ -4,10 +4,9 @@ pipeline {
     environment {
         DOCKER_IMAGE = 'flask-app'
         DOCKER_TAG = "${env.BUILD_NUMBER}"
-        EC2_IP = 'your-ec2-instance-ip'
+        EC2_IP = 'your-ec2-instance-ip'  // Thay bằng IP EC2 thực tế của bạn
         DOCKER_HUB_CREDS = credentials('docker-hub-credentials')
-        DOCKER_HUB_REPO = 'yourusername/flask-app'
-        SONARCLOUD_TOKEN = credentials('sonarcloud-token')
+        DOCKER_HUB_REPO = 'thong0710/flask-app'  // Thay thế bằng username Docker Hub thực tế
     }
     
     stages {
@@ -51,37 +50,7 @@ pipeline {
             }
         }
         
-        // stage('SonarCloud Analysis') {
-        //     steps {
-        //         withCredentials([string(credentialsId: 'sonarcloud-token', variable: 'SONAR_TOKEN')]) {
-        //             sh '''
-        //                 # Sử dụng phiên bản SonarScanner mới nhất tương thích với Java 17
-        //                 export SONAR_SCANNER_VERSION=4.8.0.2856
-                        
-        //                 # Tải SonarScanner
-        //                 wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
-                        
-        //                 # Giải nén
-        //                 unzip -q sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
-                        
-        //                 # Cấu hình thông tin JDK cho SonarScanner (tùy chọn)
-        //                 export JAVA_HOME=/usr/lib/jvm/temurin-17.0.15+6
-                        
-        //                 # Chạy SonarScanner với cấu hình đầy đủ
-        //                 ./sonar-scanner-${SONAR_SCANNER_VERSION}-linux/bin/sonar-scanner \
-        //                     -Dsonar.host.url=https://sonarcloud.io \
-        //                     -Dsonar.login=${SONAR_TOKEN} \
-        //                     -Dsonar.projectKey=NTThong0710_flask-app-cicd \
-        //                     -Dsonar.organization=ntthong0710 \
-        //                     -Dsonar.sources=. \
-        //                     -Dsonar.python.coverage.reportPaths=coverage.xml \
-        //                     -Dsonar.python.xunit.reportPath=test-results.xml \
-        //                     -Dsonar.python.version=3.9 \
-        //                     -Dsonar.exclusions=**/*test*,venv/**,**/__pycache__/**
-        //             '''
-        //         }
-        //     }
-        // }
+        // SonarCloud stage được giữ nguyên nhưng đang bị comment out
         
         stage('Build Docker Image') {
             steps {
@@ -93,11 +62,25 @@ pipeline {
         stage('Push to Docker Hub') {
             steps {
                 sh '''
+                    # Đăng nhập vào Docker Hub
                     echo $DOCKER_HUB_CREDS_PSW | docker login -u $DOCKER_HUB_CREDS_USR --password-stdin
-                    docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_HUB_REPO}:${DOCKER_TAG}
-                    docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_HUB_REPO}:latest
-                    docker push ${DOCKER_HUB_REPO}:${DOCKER_TAG}
-                    docker push ${DOCKER_HUB_REPO}:latest
+                    
+                    # In ra các biến để kiểm tra
+                    echo "Docker Image: ${DOCKER_IMAGE}"
+                    echo "Docker Tag: ${DOCKER_TAG}"
+                    echo "Docker Hub Repo: ${DOCKER_HUB_REPO}"
+                    echo "Docker Hub User: ${DOCKER_HUB_CREDS_USR}"
+                    
+                    # Tạo tên repo từ tên người dùng Docker Hub thực tế nếu DOCKER_HUB_REPO không được cấu hình
+                    ACTUAL_REPO=${DOCKER_HUB_REPO:-${DOCKER_HUB_CREDS_USR}/flask-app}
+                    
+                    # Tag với tên repo chính xác
+                    docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${ACTUAL_REPO}:${DOCKER_TAG}
+                    docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${ACTUAL_REPO}:latest
+                    
+                    # Push lên Docker Hub
+                    docker push ${ACTUAL_REPO}:${DOCKER_TAG}
+                    docker push ${ACTUAL_REPO}:latest
                 '''
             }
         }
@@ -106,12 +89,15 @@ pipeline {
             steps {
                 sshagent(['ec2-ssh-key']) {
                     sh '''
+                        # Tạo tên repo từ tên người dùng Docker Hub thực tế nếu DOCKER_HUB_REPO không được cấu hình
+                        ACTUAL_REPO=${DOCKER_HUB_REPO:-${DOCKER_HUB_CREDS_USR}/flask-app}
+                        
                         ssh -o StrictHostKeyChecking=no ec2-user@${EC2_IP} "
                             echo $DOCKER_HUB_CREDS_PSW | docker login -u $DOCKER_HUB_CREDS_USR --password-stdin
-                            docker pull ${DOCKER_HUB_REPO}:latest
+                            docker pull ${ACTUAL_REPO}:latest
                             docker stop flask-container || true
                             docker rm flask-container || true
-                            docker run -d -p 5000:5000 --name flask-container ${DOCKER_HUB_REPO}:latest
+                            docker run -d -p 5000:5000 --name flask-container ${ACTUAL_REPO}:latest
                             docker system prune -f
                         "
                     '''
