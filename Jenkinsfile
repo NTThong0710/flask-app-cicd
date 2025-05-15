@@ -4,7 +4,7 @@ pipeline {
     environment {
         DOCKER_IMAGE = 'flask-app'
         DOCKER_TAG = "${env.BUILD_NUMBER}"
-        EC2_IP = 'your-ec2-instance-ip'  // Thay bằng IP EC2 thực tế của bạn
+        EC2_IP = '3.0.59.46'  // Thay bằng IP EC2 thực tế của bạn
         DOCKER_HUB_CREDS = credentials('docker-hub-credentials')
         DOCKER_HUB_REPO = 'thong0710/flask-app'  // Thay thế bằng username Docker Hub thực tế
     }
