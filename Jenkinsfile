@@ -87,7 +87,7 @@ pipeline {
         
         stage('Deploy to EC2') {
             steps {
-                sshagent(credentials: ['ec2-user']) {
+                sshagent(credentials: ['ec2-ssh-key']) {
                     sh '''
                         # Kiểm tra SSH agent
                         ssh-add -l
