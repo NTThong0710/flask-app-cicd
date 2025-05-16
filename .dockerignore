@@ -9,8 +9,6 @@ __pycache__/
 *.zip
 *.tar.gz
 *.ipynb
-*.json
-*.csv
 
 # Ignore công cụ phát triển
 .env
