@@ -3,6 +3,7 @@ import datetime
 import platform
 import psutil
 import os
+import jinja2
 
 # Khởi tạo ứng dụng
 app = Flask(__name__)
@@ -63,7 +64,8 @@ def stats():
     # Đảm bảo không gặp lỗi khi testing
     try:
         return render_template('stats.html', logs=access_logs)
-    except:
+    except jinja2.exceptions.TemplateNotFound:
+        # Chỉ định loại ngoại lệ cụ thể thay vì bare except
         if app.config.get('TESTING', False):
             return jsonify({"logs": len(access_logs)})
         raise
