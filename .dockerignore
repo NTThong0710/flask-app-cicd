@@ -1,0 +1,20 @@
+# Ignore file logs, cache, data không cần thiết
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.log
+*.xlsx
+*.zip
+*.tar.gz
+*.ipynb
+*.json
+*.csv
+
+# Ignore công cụ phát triển
+.env
+.venv/
+.vscode/
+.idea/
+.git/
