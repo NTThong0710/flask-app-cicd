@@ -1,283 +1,103 @@
-from flask import Flask, render_template_string, jsonify, request
-import platform
-import datetime
+from flask import Flask, request, jsonify, render_template
+import pandas as pd
+import unicodedata
+import re
+import os
+import json
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 app = Flask(__name__)
 
-# HTML template với CSS đẹp mắt
-HOME_TEMPLATE = '''
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flameo App</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        body {
-            background-color: #f5f5f5;
-            color: #333;
-            line-height: 1.6;
-        }
-        .container {
-            width: 90%;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-        .header {
-            background: linear-gradient(135deg, #FF5722, #FFC107);
-            color: white;
-            border-radius: 10px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-            text-align: center;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        .header h1 {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-        }
-        .header p {
-            font-size: 1.2rem;
-            opacity: 0.9;
-        }
-        .info-card {
-            background-color: white;
-            border-radius: 10px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s ease;
-        }
-        .info-card:hover {
-            transform: translateY(-5px);
-        }
-        .card-title {
-            font-size: 1.5rem;
-            color: #FF5722;
-            margin-bottom: 1rem;
-            border-bottom: 2px solid #f5f5f5;
-            padding-bottom: 0.5rem;
-        }
-        .info-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1.5rem;
-        }
-        .btn {
-            display: inline-block;
-            background: linear-gradient(135deg, #FF5722, #FFC107);
-            color: white;
-            padding: 0.8rem 1.5rem;
-            border-radius: 5px;
-            text-decoration: none;
-            font-weight: bold;
-            transition: all 0.3s ease;
-            border: none;
-            cursor: pointer;
-            margin-top: 1rem;
-        }
-        .btn:hover {
-            opacity: 0.9;
-            transform: scale(1.05);
-        }
-        .footer {
-            text-align: center;
-            margin-top: 3rem;
-            color: #666;
-        }
-        .emoji {
-            font-size: 2rem;
-            margin-right: 0.5rem;
-            vertical-align: middle;
-        }
-        @media (max-width: 768px) {
-            .header h1 {
-                font-size: 2rem;
-            }
-            .container {
-                padding: 1rem;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1><span class="emoji">🔥</span> Welcome to Flameo!</h1>
-            <p>Successfully deployed with Jenkins CI/CD Pipeline</p>
-        </div>
-        
-        <div class="info-grid">
-            <div class="info-card">
-                <h2 class="card-title">System Info</h2>
-                <p><strong>Operating System:</strong> {{ system_info.os }}</p>
-                <p><strong>Python Version:</strong> {{ system_info.python }}</p>
-                <p><strong>Hostname:</strong> {{ system_info.hostname }}</p>
-                <p><strong>Current Time:</strong> {{ system_info.time }}</p>
-                <p><strong>Date:</strong> {{ system_info.date }}</p>
-                <a href="/health" class="btn">Check Health</a>
-            </div>
-            
-            <div class="info-card">
-                <h2 class="card-title">About This App</h2>
-                <p>This is a simple Flask application deployed using a CI/CD pipeline with Jenkins, Docker, and AWS EC2.</p>
-                <p>The pipeline automatically builds, tests, and deploys the application whenever changes are pushed to the repository.</p>
-                <p><strong>GitHub Repository:</strong>
-                    <a href="https://github.com/NTThong0710/flask-app-cicd">flask-app-cicd</a>
-                </p>
-                <a href="https://github.com/NTThong0710/flask-app-cicd"
-                    target="_blank" class="btn">View Source</a>
-            </div>
-        </div>
-        
-        <div class="footer">
-            <p>Flameo Hotman! 🔥 © 2025</p>
-            <p>Made with ❤️ by Flameo Team</p>
-        </div>
-    </div>
-</body>
-</html>
-'''
+# Tải dữ liệu từ file CSV
+csv_file = "DATA_CHATBOT.csv"
+if os.path.exists(csv_file):
+    data = pd.read_csv(csv_file).dropna()  # Loại bỏ các hàng trống
+else:
+    raise FileNotFoundError(f"Tệp '{csv_file}' không tồn tại.")
 
-# Trang health với giao diện đẹp
-HEALTH_TEMPLATE = '''
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flameo Health Check</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        body {
-            background-color: #f5f5f5;
-            color: #333;
-            line-height: 1.6;
-        }
-        .container {
-            width: 90%;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-        .header {
-            background: linear-gradient(135deg, #4CAF50, #8BC34A);
-            color: white;
-            border-radius: 10px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-            text-align: center;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        .header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
-        }
-        .status-card {
-            background-color: white;
-            border-radius: 10px;
-            padding: 2rem;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-        .status-indicator {
-            font-size: 5rem;
-            margin-bottom: 1rem;
-        }
-        .status-text {
-            font-size: 2rem;
-            font-weight: bold;
-            color: #4CAF50;
-            margin-bottom: 1rem;
-        }
-        .btn {
-            display: inline-block;
-            background: linear-gradient(135deg, #FF5722, #FFC107);
-            color: white;
-            padding: 0.8rem 1.5rem;
-            border-radius: 5px;
-            text-decoration: none;
-            font-weight: bold;
-            transition: all 0.3s ease;
-            border: none;
-            cursor: pointer;
-        }
-        .btn:hover {
-            opacity: 0.9;
-            transform: scale(1.05);
-        }
-        .footer {
-            text-align: center;
-            margin-top: 3rem;
-            color: #666;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>System Health Check</h1>
-            <p>Current status of the Flameo application</p>
-        </div>
-        
-        <div class="status-card">
-            <div class="status-indicator">✅</div>
-            <div class="status-text">{{ status }}</div>
-            <p>The system is running smoothly and all services are operational.</p>
-        </div>
-        
-        <div style="text-align: center;">
-            <a href="/" class="btn">Back to Home</a>
-        </div>
-        
-        <div class="footer">
-            <p>Flameo Hotman! 🔥 © 2025</p>
-            <p>Made with ❤️ by Flameo Team</p>
-        </div>
-    </div>
-</body>
-</html>
-'''
+# Hàm loại bỏ dấu tiếng Việt
+def remove_accents(text):
+    text = unicodedata.normalize("NFD", text)   
+    text = re.sub(r"[\u0300-\u036f]", "", text)
+    return text.lower()
 
-@app.route('/')
-def home():
-    # Kiểm tra nếu đang trong môi trường testing hoặc yêu cầu JSON
-    if app.config.get('TESTING', False) or request.headers.get('Accept') == 'application/json':
-        return jsonify({"message": "Hello from Flask in Jenkins CI/CD Pipeline!"})
+# Tạo từ điển cho phản hồi
+responses = {remove_accents(row["CÂU HỎI"]): row["CÂU TRẢ LỜI"] for _, row in data.iterrows()}
+
+# Tạo TF-IDF vectorizer
+vectorizer = TfidfVectorizer()
+
+# Hàm lấy phản hồi từ từ điển với độ tương đồng
+def get_response(user_input):
+    normalized_input = remove_accents(user_input)
     
-    # Thông tin hệ thống
-    system_info = {
-        "os": platform.system() + " " + platform.release(),
-        "python": platform.python_version(),
-        "time": datetime.datetime.now().strftime("%H:%M:%S"),
-        "date": datetime.datetime.now().strftime("%d-%m-%Y"),
-        "hostname": platform.node()
-    }
-    
-    # Trả về HTML với template
-    return render_template_string(HOME_TEMPLATE, system_info=system_info)
+    # Tạo một danh sách câu hỏi từ cơ sở dữ liệu
+    questions = list(responses.keys())
+    questions.append(normalized_input)  # Thêm câu hỏi của người dùng vào danh sách
 
-@app.route('/health')
-def health():
-    # Kiểm tra nếu đang trong môi trường testing hoặc yêu cầu JSON
-    if app.config.get('TESTING', False) or request.headers.get('Accept') == 'application/json':
-        return jsonify({"status": "healthy"})
-    
-    # Trả về HTML với template
-    return render_template_string(HEALTH_TEMPLATE, status="Healthy")
+    # Tính toán TF-IDF cho các câu hỏi
+    tfidf_matrix = vectorizer.fit_transform(questions)
 
-if __name__ == '__main__':
+    # Tính toán độ tương đồng giữa câu hỏi người dùng và các câu hỏi trong cơ sở dữ liệu
+    similarities = cosine_similarity(tfidf_matrix[-1], tfidf_matrix[:-1]).flatten()
+
+    # Tìm câu hỏi có độ tương đồng cao nhất
+    most_similar_index = similarities.argmax()
+    most_similar_question = questions[most_similar_index]
+
+    return responses.get(most_similar_question, "Xin lỗi, tôi không hiểu câu hỏi của bạn.")
+
+# Hàm lưu lịch sử cuộc trò chuyện vào file JSON
+def save_chat_history(user_input, bot_response):
+    history_file = "chat_history.json"
+    # Kiểm tra nếu file đã tồn tại thì đọc nội dung hiện có
+    if os.path.exists(history_file):
+        with open(history_file, "r", encoding="utf-8") as file:
+            chat_history = json.load(file)
+    else:
+        chat_history = []
+
+    # Thêm tin nhắn mới vào lịch sử
+    chat_history.append({"user": user_input, "bot": bot_response})
+
+    # Ghi lại lịch sử vào file JSON
+    with open(history_file, "w", encoding="utf-8") as file:
+        json.dump(chat_history, file, ensure_ascii=False, indent=4)
+
+# Endpoint để xử lý yêu cầu của người dùng
+@app.route("/get_response", methods=["POST"])
+def chatbot_response():
+    user_input = request.json.get("message", "")
+    response = get_response(user_input)
+    save_chat_history(user_input, response)  # Lưu tin nhắn vào lịch sử
+    return jsonify({"response": response})
+
+# Trang HTML chính cho chatbot
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+@app.route('/chat_history.json')
+def get_chat_history():
+    # Đọc dữ liệu từ file chat_history.json
+    if os.path.exists('chat_history.json'):
+        with open('chat_history.json', 'r', encoding="utf-8") as f:
+            chat_history = json.load(f)
+    else:
+        chat_history = []  # Nếu file không tồn tại, trả về danh sách rỗng
+    return jsonify(chat_history)
+
+@app.route('/clear_history', methods=['POST'])
+def clear_chat_history():
+    # Xóa nội dung trong file chat_history.json
+    with open('chat_history.json', 'w', encoding="utf-8") as f:
+        json.dump([], f)  # Lưu một danh sách rỗng để xóa tất cả
+    return jsonify({})  # Không trả về thông báo gì
+@app.route("/faq_questions")
+def faq_questions():
+    faq_list = list(responses.keys())  # Lấy các câu hỏi từ từ điển
+    return jsonify(faq_list)
+
+if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
