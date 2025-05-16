@@ -97,7 +97,7 @@ def create_templates_if_needed():
     # Tạo thư mục templates nếu chưa tồn tại
     os.makedirs('templates', exist_ok=True)
     
-    # Tạo file template index.html
+    # Tạo file template index.html với thông điệp Flameo
     if not os.path.exists('templates/index.html'):
         with open('templates/index.html', 'w') as f:
             f.write('''
@@ -106,7 +106,7 @@ def create_templates_if_needed():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flask CI/CD Demo</title>
+    <title>Welcome to Flameo</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
@@ -122,7 +122,7 @@ def create_templates_if_needed():
             transform: translateY(-5px);
         }
         .header-container {
-            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            background: linear-gradient(135deg, #FF5722, #FFC107);
             color: white;
             border-radius: 1rem;
             padding: 2rem;
@@ -136,16 +136,21 @@ def create_templates_if_needed():
             margin-top: 1rem;
         }
         .btn-primary {
-            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            background: linear-gradient(135deg, #FF5722, #FFC107);
             border: none;
+        }
+        .flameo-logo {
+            font-size: 5rem;
+            margin-bottom: 1rem;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header-container">
-            <h1 class="display-4">Flask CI/CD Pipeline Demo</h1>
-            <p class="lead">Xây dựng và triển khai tự động với Jenkins</p>
+            <div class="flameo-logo">🔥</div>
+            <h1 class="display-3">Welcome to Flameo!</h1>
+            <p class="lead">Successfully deployed with Jenkins CI/CD Pipeline</p>
             
             <div class="system-info">
                 <div class="row">
@@ -203,7 +208,7 @@ def create_templates_if_needed():
         </div>
         
         <div class="text-center mt-5">
-            <p>Được triển khai tự động với Jenkins CI/CD Pipeline</p>
+            <p>Flameo Hotman! 🔥 © 2025</p>
             <p><small>Thời gian hiện tại: {{ system_info.time }}</small></p>
         </div>
     </div>
@@ -222,7 +227,7 @@ def create_templates_if_needed():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Thống kê truy cập - Flask CI/CD Demo</title>
+    <title>Flameo - Thống kê truy cập</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
@@ -230,7 +235,7 @@ def create_templates_if_needed():
             padding-top: 2rem;
         }
         .header-container {
-            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            background: linear-gradient(135deg, #FF5722, #FFC107);
             color: white;
             border-radius: 1rem;
             padding: 2rem;
@@ -244,7 +249,11 @@ def create_templates_if_needed():
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
         .btn-primary {
-            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            background: linear-gradient(135deg, #FF5722, #FFC107);
+            border: none;
+        }
+        .btn-danger {
+            background: linear-gradient(135deg, #f44336, #ff5722);
             border: none;
         }
     </style>
@@ -252,7 +261,7 @@ def create_templates_if_needed():
 <body>
     <div class="container">
         <div class="header-container">
-            <h1>Thống kê truy cập</h1>
+            <h1>🔥 Flameo - Thống kê truy cập</h1>
             <p class="lead">Log các truy cập gần đây</p>
         </div>
         
@@ -295,7 +304,7 @@ def create_templates_if_needed():
         </div>
         
         <div class="text-center mt-5">
-            <p>Được triển khai tự động với Jenkins CI/CD Pipeline</p>
+            <p>Flameo Hotman! 🔥 © 2025</p>
         </div>
     </div>
     
