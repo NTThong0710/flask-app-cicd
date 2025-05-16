@@ -84,22 +84,23 @@ pipeline {
                 '''
             }
         }
-        stage('Deploy to EC2') {
-            steps {
-                sshagent(credentials: ['ec2-ssh-key']) {
-                    sh '''
-                        ssh -o StrictHostKeyChecking=no -t ec2-user@${EC2_IP} '
-			    echo $DOCKER_HUB_CREDS_PSW | docker login -u $DOCKER_HUB_CREDS_USR --password-stdin
-                            docker pull ${DOCKER_HUB_REPO}:latest
-                            docker stop flask-app || true
-                            docker rm flask-app || true
-                            docker run -d -p 5000:5000 --name flask-app ${DOCKER_HUB_REPO}:latest
-			    docker system prune -f
-                        '
-                    '''
-                }
-            }
-        }
+	stage('Deploy to EC2') {
+	    steps {
+	        sshagent(credentials: ['ec2-ssh-key']) {
+	            sh """
+	                # Sử dụng nháy kép để cho phép thay thế biến môi trường
+	                ssh -o StrictHostKeyChecking=no -t ec2-user@${EC2_IP} "
+	                    # Sử dụng biến cụ thể thay vì biến môi trường
+	                    docker pull thong0710/flask-app:latest
+	                    docker stop flask-app || true
+	                    docker rm flask-app || true
+	                    docker run -d -p 5000:5000 --name flask-app thong0710/flask-app:latest
+	                    docker system prune -f
+	                "
+	            """
+	        }
+	    }
+	}
 
     }
             
