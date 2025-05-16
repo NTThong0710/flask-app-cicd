@@ -40,32 +40,29 @@ pipeline {
                 }
             }
         }
-	stage('Install Java 17') {
-	    steps {
-	        sh '''
-	            apt-get update
-	            apt-get install -y openjdk-17-jdk
-	            update-alternatives --set java /usr/lib/jvm/java-17-openjdk-amd64/bin/java
-	            update-alternatives --set javac /usr/lib/jvm/java-17-openjdk-amd64/bin/javac
-	            java -version
-	        '''
-	    }
-	}
-        
 	stage('SonarCloud Analysis') {
 	    steps {
 	        withCredentials([string(credentialsId: 'sonarcloud-token', variable: 'SONAR_TOKEN')]) {
 	            sh '''
 	                apt-get update && apt-get install -y wget unzip
+	
 	                export SONAR_SCANNER_VERSION=4.6.2.2472
 	                wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
 	                unzip -q sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
-	                export PATH=$PATH:$(pwd)/sonar-scanner-${SONAR_SCANNER_VERSION}-linux/bin
+	
+	                # Thiết lập JAVA_HOME theo đúng bản Java 17
+	                export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))
+	                export PATH=$JAVA_HOME/bin:$(pwd)/sonar-scanner-${SONAR_SCANNER_VERSION}-linux/bin:$PATH
+	
+	                echo "Using Java:"
+	                java -version
+	
 	                sonar-scanner -Dsonar.login=${SONAR_TOKEN} -X
 	            '''
 	        }
 	    }
 	}
+
 
         
         stage('Build Docker Image') {
