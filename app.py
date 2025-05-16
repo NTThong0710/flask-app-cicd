@@ -129,11 +129,11 @@ HOME_TEMPLATE = '''
                 <h2 class="card-title">About This App</h2>
                 <p>This is a simple Flask application deployed using a CI/CD pipeline with Jenkins, Docker, and AWS EC2.</p>
                 <p>The pipeline automatically builds, tests, and deploys the application whenever changes are pushed to the repository.</p>
-                <p><strong>GitHub Repository:</strong> 
-                   <a href="https://github.com/NTThong0710/flask-app-cicd">flask-app-cicd</a>
+                <p><strong>GitHub Repository:</strong>
+                    <a href="https://github.com/NTThong0710/flask-app-cicd">flask-app-cicd</a>
                 </p>
-                <a href="https://github.com/NTThong0710/flask-app-cicd" 
-                   target="_blank" class="btn">View Source</a>
+                <a href="https://github.com/NTThong0710/flask-app-cicd"
+                    target="_blank" class="btn">View Source</a>
             </div>
         </div>
         
