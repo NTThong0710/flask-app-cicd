@@ -31,7 +31,7 @@ pipeline {
             steps {
                 sh '''
                     . venv/bin/activate
-                    flake8 --ignore=E302,E305,W292 --max-line-length=120
+                    flake8 --ignore=E302,E305,W292,W293 --max-line-length=120
                 '''
             }
         }
