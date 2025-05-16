@@ -41,20 +41,20 @@ pipeline {
             }
         }
         
-        // stage('SonarCloud Analysis') {
-        //     steps {
-        //         withCredentials([string(credentialsId: 'sonarcloud-token', variable: 'SONAR_TOKEN')]) {
-        //             sh '''
-        //                 export SONAR_SCANNER_VERSION=4.6.2.2472
-        //                 wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
-        //                 unzip -q sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
-        //                 ./sonar-scanner-${SONAR_SCANNER_VERSION}-linux/bin/sonar-scanner \
-        //                     -Dsonar.host.url=https://sonarcloud.io \
-        //                     -Dsonar.login=${SONAR_TOKEN}
-        //             '''
-        //         }
-        //     }
-        // }
+	stage('SonarCloud Analysis') {
+	    steps {
+	        withCredentials([string(credentialsId: 'sonarcloud-token', variable: 'SONAR_TOKEN')]) {
+	            sh '''
+	                export SONAR_SCANNER_VERSION=4.6.2.2472
+	                wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
+	                unzip -q sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
+	                ./sonar-scanner-${SONAR_SCANNER_VERSION}-linux/bin/sonar-scanner \
+	                    -Dsonar.login=${SONAR_TOKEN}
+	            '''
+	        }
+	    }
+	}
+
         
         stage('Build Docker Image') {
             steps {
