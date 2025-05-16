@@ -2,7 +2,6 @@ from flask import Flask, jsonify, render_template, request, redirect, url_for
 import datetime
 import platform
 import psutil
-import os
 
 # Khởi tạo ứng dụng
 app = Flask(__name__)
