@@ -27,15 +27,6 @@ pipeline {
             }
         }
         
-        stage('Lint') {
-            steps {
-                sh '''
-                    . venv/bin/activate
-                    flake8 --ignore=E302,E305,W292,W293 --max-line-length=120
-                '''
-            }
-        }
-        
         stage('Run Tests') {
             steps {
                 sh '''
@@ -50,7 +41,20 @@ pipeline {
             }
         }
         
-        // SonarCloud stage được giữ nguyên nhưng đang bị comment out
+        stage('SonarCloud Analysis') {
+            steps {
+                withCredentials([string(credentialsId: 'sonarcloud-token', variable: 'SONAR_TOKEN')]) {
+                    sh '''
+                        export SONAR_SCANNER_VERSION=4.7.0.2747
+                        wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
+                        unzip -q sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
+                        ./sonar-scanner-${SONAR_SCANNER_VERSION}-linux/bin/sonar-scanner \
+                            -Dsonar.host.url=https://sonarcloud.io \
+                            -Dsonar.login=${SONAR_TOKEN}
+                    '''
+                }
+            }
+        }
         
         stage('Build Docker Image') {
             steps {
@@ -84,22 +88,12 @@ pipeline {
                 '''
             }
         }
-	stage('Test SSH Connection') {
-	    steps {
-	        sshagent(credentials: ['ec2-ssh-key']) {
-	            sh """
-	                ssh -o StrictHostKeyChecking=no ec2-user@${EC2_IP} 'echo SSH connection successful'
-	            """
-	        }
-	    }
-	}
+
 	stage('Deploy to EC2') {
 	    steps {
 	        sshagent(credentials: ['ec2-ssh-key']) {
 	            sh """
-	                # Sử dụng nháy kép để cho phép thay thế biến môi trường
 	                ssh -o StrictHostKeyChecking=no -t ec2-user@${EC2_IP} "
-	                    # Sử dụng biến cụ thể thay vì biến môi trường
 	                    docker pull thong0710/flask-app:latest
 	                    docker stop flask-app || true
 	                    docker rm flask-app || true
