@@ -84,6 +84,15 @@ pipeline {
                 '''
             }
         }
+	stage('Test SSH Connection') {
+	    steps {
+	        sshagent(credentials: ['ec2-ssh-key']) {
+	            sh """
+	                ssh -o StrictHostKeyChecking=no ec2-user@${EC2_IP} 'echo SSH connection successful'
+	            """
+	        }
+	    }
+	}
 	stage('Deploy to EC2') {
 	    steps {
 	        sshagent(credentials: ['ec2-ssh-key']) {
