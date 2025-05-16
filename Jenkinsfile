@@ -40,6 +40,17 @@ pipeline {
                 }
             }
         }
+	stage('Install Java 17') {
+	    steps {
+	        sh '''
+	            apt-get update
+	            apt-get install -y openjdk-17-jdk
+	            update-alternatives --set java /usr/lib/jvm/java-17-openjdk-amd64/bin/java
+	            update-alternatives --set javac /usr/lib/jvm/java-17-openjdk-amd64/bin/javac
+	            java -version
+	        '''
+	    }
+	}
         
 	stage('SonarCloud Analysis') {
 	    steps {
