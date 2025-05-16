@@ -4,7 +4,7 @@ pipeline {
     environment {
         DOCKER_IMAGE = 'flask-app'
         DOCKER_TAG = "${env.BUILD_NUMBER}"
-        EC2_IP = '18.142.183.78' 
+        EC2_IP = '18.141.191.172' 
         DOCKER_HUB_CREDS = credentials('docker-hub-credentials')
         DOCKER_HUB_REPO = 'thong0710/flask-app'  
     }
@@ -45,6 +45,7 @@ pipeline {
 	    steps {
 	        withCredentials([string(credentialsId: 'sonarcloud-token', variable: 'SONAR_TOKEN')]) {
 	            sh '''
+	                apt-get update && apt-get install -y wget unzip
 	                export SONAR_SCANNER_VERSION=4.6.2.2472
 	                wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
 	                unzip -q sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
@@ -54,6 +55,7 @@ pipeline {
 	        }
 	    }
 	}
+
 
         
         stage('Build Docker Image') {
