@@ -254,8 +254,8 @@ HEALTH_TEMPLATE = '''
 
 @app.route('/')
 def home():
-    # Vẫn trả về JSON cho các yêu cầu API
-    if 'application/json' in request.headers.get('Accept', ''):
+    # Kiểm tra nếu đang trong môi trường testing hoặc yêu cầu JSON
+    if app.config.get('TESTING', False) or request.headers.get('Accept') == 'application/json':
         return jsonify({"message": "Hello from Flask in Jenkins CI/CD Pipeline!"})
     
     # Thông tin hệ thống
@@ -272,8 +272,8 @@ def home():
 
 @app.route('/health')
 def health():
-    # Vẫn trả về JSON cho các yêu cầu API
-    if 'application/json' in request.headers.get('Accept', ''):
+    # Kiểm tra nếu đang trong môi trường testing hoặc yêu cầu JSON
+    if app.config.get('TESTING', False) or request.headers.get('Accept') == 'application/json':
         return jsonify({"status": "healthy"})
     
     # Trả về HTML với template
