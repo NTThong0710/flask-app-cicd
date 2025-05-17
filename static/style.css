@@ -59,29 +59,29 @@ body {
 /* Container chính của chatbot */
 .chat-container {
     width: 100%;
-    max-width: 900px; /* Chiều rộng tối đa của container */
+    max-width: 900px;
     background-color: #ffffff;
     box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.15);
     border-radius: 10px;
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    margin: 0 auto; /* Căn giữa container trong bố cục */
+    margin: 0 auto; 
 }
 
 
 /* Khung chat chính */
 #chatbox {
     padding: 15px;
-    height: 350px; /* Chiều cao khung chat */
-    overflow-y: auto; /* Cuộn dọc khi nội dung quá nhiều */
+    height: 350px;
+    overflow-y: auto; 
     border-bottom: 1px solid #e0e0e0;
     background-color: #00796b;
     scroll-behavior: smooth;
-    margin-bottom: 10px; /* Khoảng cách giữa khung chat và phần nhập liệu */
-    border-radius: 10px; /* Bo tròn các góc */
-    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1); /* Đổ bóng cho khung chat */
-    max-width: 100%; /* Đảm bảo khung chat không vượt quá chiều rộng */
+    margin-bottom: 10px;
+    border-radius: 10px; 
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+    max-width: 100%; 
 }
 
 
@@ -114,36 +114,34 @@ body {
 
 .input-container {
     display: flex;
-    flex-direction: column; /* Đặt chiều hướng thành cột */
-    align-items: center; /* Căn giữa nội dung */
+    flex-direction: column; 
+    align-items: center; 
     padding: 20px;
     background-image: url('background_input.jpg'); 
     border-top: 1px solid #e0e0e0;
     border-radius: 0 0 10px 10px;
 }
 
-/* Phong cách input cho tin nhắn */
 input[type="text"] {
     padding: 10px;
     border: 1px solid #e0e0e0;
-    width: 80%; /* Chiều rộng của ô nhập */
+    width: 80%; 
     box-sizing: border-box;
     font-size: 0.9rem;
     outline: none;
     color: #424242;
     background-color: #fafafa;
     border-radius: 30px;
-    margin-bottom: 10px; /* Khoảng cách giữa ô nhập và nút gửi */
+    margin-bottom: 10px; 
 }
 
-/* Phong cách của nút gửi */
 button {
     padding: 15px;
     border: none;
     background-color: #00796b;
     color: white;
     cursor: pointer;
-    width: 80%; /* Chiều rộng của nút gửi */
+    width: 80%; 
     font-size: 0.9rem;
     font-weight: bold;
     transition: background-color 0.2s;
@@ -156,7 +154,6 @@ button:hover {
     background-color: #004d40;
 }
 
-/* Hiệu ứng cuộn mượt cho khung chat */
 #chatbox::-webkit-scrollbar {
     width: 8px;
 }
@@ -170,24 +167,24 @@ button:hover {
     background-color: #a0a0a0;
 }
 .sidebar {
-    width: 250px; /* Chiều rộng của sidebar */
-    background-color: #f8f9fc; /* Màu nền của sidebar */
+    width: 250px; 
+    background-color: #f8f9fc; 
     background-image: url('background_sidebar.jpg'); 
-    padding: 10px; /* Padding bên trong */
-    border-right: 1px solid #ccc; /* Đường viền bên phải */
+    padding: 10px; 
+    border-right: 1px solid #ccc; 
 }
 
-/* Định dạng cho nút xóa */
+
 #clear-history {
-    width: 80%; /* Nút chiếm toàn bộ chiều rộng */
-    margin-bottom: 10px; /* Khoảng cách dưới nút */
-    padding: 10px; /* Padding cho nút */
-    background-color: #00796b; /* Màu nền của nút */
-    color: white; /* Màu chữ của nút */
-    border: none; /* Không có viền */
-    border-radius: 5px; /* Bo góc cho nút */
-    cursor: pointer; /* Hiển thị con trỏ chuột khi hover */
-    font-size: 0.9rem; /* Kích thước chữ của nút */
+    width: 80%; 
+    margin-bottom: 10px;
+    padding: 10px;
+    background-color: #00796b; 
+    color: white; 
+    border: none;
+    border-radius: 5px; 
+    cursor: pointer; 
+    font-size: 0.9rem;
 }
 
 /* Ẩn và hiển thị lịch sử trò chuyện */
@@ -261,8 +258,8 @@ button:hover {
     cursor: pointer;
     font-size: 0.9rem;
     font-weight: bold;
-    flex: 1; /* Đảm bảo hai nút có chiều rộng bằng nhau */
-    margin: 0 5px; /* Khoảng cách giữa hai nút */
+    flex: 1;
+    margin: 0 5px; 
     transition: background-color 0.2s;
 }
 

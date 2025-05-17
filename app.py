@@ -101,3 +101,76 @@ def faq_questions():
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
+
+# # Endpoint để xử lý yêu cầu của người dùng
+# @app.route("/get_response", methods=["POST"])
+# def chatbot_response():
+#     user_input = request.json.get("message", "")
+#     response = get_response(user_input)
+#     save_chat_history(user_input, response)  # Lưu tin nhắn vào lịch sử
+#     return jsonify({"response": response})
+
+# # Trang HTML chính cho chatbot
+# @app.route("/")
+# def index():
+#     return render_template("index.html")
+
+# @app.route('/chat_history.json')
+# def get_chat_history():
+#     # Đọc dữ liệu từ file chat_history.json
+#     if os.path.exists('chat_history.json'):
+#         with open('chat_history.json', 'r', encoding="utf-8") as f:
+#             chat_history = json.load(f)
+#     else:
+#         chat_history = []  # Nếu file không tồn tại, trả về danh sách rỗng
+#     return jsonify(chat_history)
+
+# @app.route('/clear_history', methods=['POST'])
+# def clear_chat_history():
+#     # Xóa nội dung trong file chat_history.json
+#     with open('chat_history.json', 'w', encoding="utf-8") as f:
+#         json.dump([], f)  # Lưu một danh sách rỗng để xóa tất cả
+#     return jsonify({})  # Không trả về thông báo gì
+# @app.route("/faq_questions")
+# def faq_questions():
+#     faq_list = list(responses.keys())  # Lấy các câu hỏi từ từ điển
+#     return jsonify(faq_list)
+
+# if __name__ == "__main__":
+#     app.run(host='0.0.0.0', port=5000)
+# Endpoint để xử lý yêu cầu của người dùng
+# @app.route("/get_response", methods=["POST"])
+# def chatbot_response():
+#     user_input = request.json.get("message", "")
+#     response = get_response(user_input)
+#     save_chat_history(user_input, response)  # Lưu tin nhắn vào lịch sử
+#     return jsonify({"response": response})
+
+# # Trang HTML chính cho chatbot
+# @app.route("/")
+# def index():
+#     return render_template("index.html")
+
+# @app.route('/chat_history.json')
+# def get_chat_history():
+#     # Đọc dữ liệu từ file chat_history.json
+#     if os.path.exists('chat_history.json'):
+#         with open('chat_history.json', 'r', encoding="utf-8") as f:
+#             chat_history = json.load(f)
+#     else:
+#         chat_history = []  # Nếu file không tồn tại, trả về danh sách rỗng
+#     return jsonify(chat_history)
+
+# @app.route('/clear_history', methods=['POST'])
+# def clear_chat_history():
+#     # Xóa nội dung trong file chat_history.json
+#     with open('chat_history.json', 'w', encoding="utf-8") as f:
+#         json.dump([], f)  # Lưu một danh sách rỗng để xóa tất cả
+#     return jsonify({})  # Không trả về thông báo gì
+# @app.route("/faq_questions")
+# def faq_questions():
+#     faq_list = list(responses.keys())  # Lấy các câu hỏi từ từ điển
+#     return jsonify(faq_list)
+
+# if __name__ == "__main__":
+#     app.run(host='0.0.0.0', port=5000)
