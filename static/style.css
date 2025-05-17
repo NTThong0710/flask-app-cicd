@@ -205,29 +205,29 @@ button:hover {
 .voice-button {
     padding: 15px;
     border: none;
-    background-color: #00796b; /* Màu nền của nút */
-    color: white; /* Màu chữ */
-    cursor: pointer; /* Hiển thị con trỏ khi hover */
-    width: 80%; /* Chiều rộng của nút */
-    font-size: 0.9rem; /* Kích thước chữ */
-    font-weight: bold; /* Đậm chữ */
-    transition: background-color 0.2s, transform 0.2s; /* Hiệu ứng chuyển tiếp */
-    border-radius: 20px; /* Bo góc cho nút */
-    display: flex; /* Căn giữa nội dung */
-    align-items: center; /* Căn giữa chiều dọc */
-    justify-content: center; /* Căn giữa chiều ngang */
+    background-color: #00796b; 
+    color: white; 
+    cursor: pointer; 
+    width: 80%;
+    font-size: 0.9rem; 
+    font-weight: bold; 
+    transition: background-color 0.2s, transform 0.2s; 
+    border-radius: 20px; 
+    display: flex; 
+    align-items: center;
+    justify-content: center; 
 }
 
 .voice-button:hover {
-    background-color: #004d40; /* Màu nền khi hover */
-    transform: scale(1.05); /* Tăng kích thước nhẹ khi hover */
+    background-color: #004d40; 
+    transform: scale(1.05); 
 }
 
-/* Biểu tượng micro trong nút */
+
 .voice-button i {
-    margin-right: 5px; /* Khoảng cách giữa biểu tượng và chữ */
+    margin-right: 5px; 
 }
-/* Phong cách cho Câu Hỏi Thường Gặp */
+
 #faq-questions {
     margin-top: 20px;
 }
@@ -248,8 +248,8 @@ button:hover {
 
 .toggle-buttons {
     display: flex;
-    justify-content: space-around; /* Căn đều khoảng cách giữa hai nút */
-    margin-bottom: 10px; /* Khoảng cách giữa nút và nội dung bên dưới */
+    justify-content: space-around; 
+    margin-bottom: 10px; 
 }
 
 .toggle-buttons button {
