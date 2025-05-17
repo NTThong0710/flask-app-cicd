@@ -25,7 +25,7 @@ def remove_accents(text):
 # Tạo từ điển cho phản hồi
 responses = {remove_accents(row["CÂU HỎI"]): row["CÂU TRẢ LỜI"] for _, row in data.iterrows()}
 
-# Tạo TF-IDF vectorizer
+# Tạo TF-IDF vectorizer:
 vectorizer = TfidfVectorizer()
 
 # Hàm lấy phản hồi từ từ điển với độ tương đồng
