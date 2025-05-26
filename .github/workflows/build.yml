@@ -112,27 +112,27 @@ jobs:
         else
           echo "ℹ️  No test files found. Creating basic test..."
           echo "
-import requests
-import subprocess
-import time
+        import requests
+        import subprocess
+        import time
 
-def test_app_starts():
-    '''Test that the app can start without errors'''
-    try:
-        # Test import
-        import app
-        assert True
-    except Exception as e:
-        assert False, f'App failed to import: {e}'
+        def test_app_starts():
+            '''Test that the app can start without errors'''
+            try:
+                # Test import
+                import app
+                assert True
+            except Exception as e:
+                assert False, f'App failed to import: {e}'
 
-def test_basic_functionality():
-    '''Basic functionality test'''
-    import app
-    # Add more specific tests here
-    assert hasattr(app, 'app'), 'Flask app object should exist'
-          " > basic_test.py
-          pytest basic_test.py --verbose
-        fi
+        def test_basic_functionality():
+            '''Basic functionality test'''
+            import app
+            # Add more specific tests here
+            assert hasattr(app, 'app'), 'Flask app object should exist'
+                  " > basic_test.py
+                  pytest basic_test.py --verbose
+                fi
 
   sonarcloud:
     name: SonarCloud Analysis
