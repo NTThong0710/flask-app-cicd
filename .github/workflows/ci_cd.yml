@@ -34,52 +34,52 @@ jobs:
         
     - name: Python syntax check
       run: |
-        echo "🔍 Checking Python syntax..."
+        echo "Checking Python syntax..."
         python -m py_compile app.py
         find . -name "*.py" -exec python -m py_compile {} \;
-        echo "✅ Syntax check passed"
+        echo "Syntax check passed"
         
     - name: Code style check (PEP8)
       run: |
-        echo "🎨 Checking code style with flake8..."
+        echo "Checking code style with flake8..."
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=venv,env
         flake8 . --count --max-complexity=10 --max-line-length=120 --statistics --exclude=venv,env || true
-        echo "✅ Code style check completed"
+        echo "Code style check completed"
         
     - name: Code formatting check
       run: |
-        echo "📝 Checking code formatting with black..."
-        black --check --diff . || echo "⚠️  Code formatting could be improved"
+        echo "Checking code formatting with black..."
+        black --check --diff . || echo "  Code formatting could be improved"
         
     - name: Security vulnerability scan
       run: |
-        echo "🔒 Scanning for security vulnerabilities..."
+        echo " Scanning for security vulnerabilities..."
         bandit -r . -f json -o bandit-report.json || true
-        bandit -r . --severity-level medium || echo "⚠️  Security warnings found"
+        bandit -r . --severity-level medium || echo "  Security warnings found"
         
     - name: Dependency security check
       run: |
-        echo "📦 Checking dependencies for known vulnerabilities..."
-        safety check || echo "⚠️  Dependency security warnings found"
+        echo " Checking dependencies for known vulnerabilities..."
+        safety check || echo "  Dependency security warnings found"
         
     - name: Type checking (if type hints exist)
       run: |
-        echo "🏷️  Running type checks..."
-        mypy app.py --ignore-missing-imports || echo "ℹ️  Type checking completed with warnings"
+        echo "  Running type checks..."
+        mypy app.py --ignore-missing-imports || echo "ℹ  Type checking completed with warnings"
         
     - name: Import and basic functionality test
       run: |
-        echo "🧪 Testing basic application functionality..."
+        echo " Testing basic application functionality..."
         python3 -c "
         try:
             import app
-            print('✅ App import successful')
+            print(' App import successful')
             if hasattr(app, 'app'):
-                print('✅ Flask app object found')
+                print(' Flask app object found')
             else:
-                print('⚠️  Flask app object not found')
+                print('  Flask app object not found')
         except Exception as e:
-            print(f'❌ App import failed: {e}')
+            print(f' App import failed: {e}')
             exit(1)
         "
 
@@ -106,11 +106,11 @@ jobs:
     - name: Run unit tests
       run: |
         if [ -f "test_app.py" ] || [ -d "tests/" ]; then
-          echo "🧪 Running unit tests..."
+          echo " Running unit tests..."
           pytest --verbose --cov=. --cov-report=term --cov-report=xml
-          echo "✅ Tests completed"
+          echo " Tests completed"
         else
-          echo "ℹ️  No test files found. Creating basic test..."
+          echo "  No test files found. Creating basic test..."
           echo "
         import requests
         import subprocess
@@ -186,14 +186,14 @@ jobs:
         
     - name: Build and push Docker image
       run: |
-        echo "🐳 Building Docker image..."
+        echo " Building Docker image..."
         docker build -t ${{ env.DOCKER_HUB_REPO }}:${{ github.run_number }} .
         docker tag ${{ env.DOCKER_HUB_REPO }}:${{ github.run_number }} ${{ env.DOCKER_HUB_REPO }}:latest
         
-        echo "📤 Pushing to Docker Hub..."
+        echo " Pushing to Docker Hub..."
         docker push ${{ env.DOCKER_HUB_REPO }}:${{ github.run_number }}
         docker push ${{ env.DOCKER_HUB_REPO }}:latest
-        echo "✅ Docker images pushed successfully"
+        echo " Docker images pushed successfully"
 
   deploy:
     name: Deploy to EC2
@@ -204,7 +204,7 @@ jobs:
     steps:
     - name: Deploy to EC2
       run: |
-        echo "🚀 Deploying to EC2..."
+        echo " Deploying to EC2..."
         
         # Install SSH client
         which ssh || (apt-get update && apt-get install -y openssh-client)
@@ -219,45 +219,18 @@ jobs:
         
         # Deploy
         ssh -i ~/.ssh/id_rsa ec2-user@${{ env.EC2_IP }} << 'EOF'
-          echo "📥 Pulling latest image..."
+          echo " Pulling latest image..."
           docker pull ${{ env.DOCKER_HUB_REPO }}:latest
           
-          echo "🔄 Updating application..."
+          echo " Updating application..."
           docker stop flask-app 2>/dev/null || true
           docker rm flask-app 2>/dev/null || true
           docker run -d --name flask-app --restart unless-stopped -p 5000:5000 ${{ env.DOCKER_HUB_REPO }}:latest
           
-          echo "🧹 Cleaning up..."
+          echo " Cleaning up..."
           docker image prune -f
           
-          echo "✅ Deployment completed successfully!"
+          echo " Deployment completed successfully!"
         EOF
         
-        echo "🌐 Application deployed at: http://${{ env.EC2_IP }}:5000"
-
-  notify:
-    name: Notification
-    needs: [code-verification, test, sonarcloud, build-and-push, deploy]
-    runs-on: ubuntu-latest
-    if: always()
-    
-    steps:
-    - name: Pipeline Status Summary
-      run: |
-        echo "================================================"
-        echo "🚀 CI/CD Pipeline Summary"
-        echo "================================================"
-        echo "📋 Code Verification: ${{ needs.code-verification.result }}"
-        echo "🧪 Unit Tests: ${{ needs.test.result }}"
-        echo "📊 SonarCloud: ${{ needs.sonarcloud.result }}"
-        echo "🐳 Build & Push: ${{ needs.build-and-push.result }}"
-        echo "🚀 Deployment: ${{ needs.deploy.result }}"
-        echo "================================================"
-        
-        if [[ "${{ needs.deploy.result }}" == "success" ]]; then
-          echo "✅ Pipeline completed successfully!"
-          echo "🌐 Application: http://${{ env.EC2_IP }}:5000"
-          echo "📊 Monitoring: http://${{ env.EC2_IP }}:3000"
-        else
-          echo "❌ Pipeline failed. Check logs for details."
-        fi
+        echo " Application deployed at: http://${{ env.EC2_IP }}:5000"
