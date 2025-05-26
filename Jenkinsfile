@@ -16,28 +16,13 @@ pipeline {
             }
         }
         
-        stage('Install Dependencies') {
+        stage('Install Dependencies & Test') {
             steps {
                 sh '''
-                    python3 -m venv venv
-                    . venv/bin/activate
-                    pip install --upgrade pip
-                    pip install -r requirements.txt
+                    # Dùng system Python, không tạo venv
+                    pip3 install --user -r requirements.txt
+                    python3 -m pytest --cov=. --cov-report=xml --junitxml=test-results.xml
                 '''
-            }
-        }
-        
-        stage('Run Tests') {
-            steps {
-                sh '''
-                    . venv/bin/activate
-                    pytest --cov=. --cov-report=xml --junitxml=test-results.xml
-                '''
-            }
-            post {
-                always {
-                    junit 'test-results.xml'
-                }
             }
         }
         
