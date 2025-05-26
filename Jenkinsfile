@@ -4,7 +4,7 @@ pipeline {
     environment {
         DOCKER_IMAGE = 'flask-app'
         DOCKER_TAG = "${env.BUILD_NUMBER}"
-        EC2_IP = '47.129.246.224' 
+        EC2_IP = '13.215.194.199' 
         DOCKER_HUB_CREDS = credentials('docker-hub-credentials')
         DOCKER_HUB_REPO = 'thong0710/flask-app'  
     }
