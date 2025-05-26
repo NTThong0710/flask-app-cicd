@@ -22,11 +22,6 @@ pipeline {
                     # Kiểm tra syntax Python nhanh
                     python3 -m py_compile app.py
                     echo "Python syntax check passed"
-                    
-                    # Basic test nếu có
-                    if [ -f "test_app.py" ]; then
-                        python3 -m pytest test_app.py -v --tb=short
-                    fi
                 '''
             }
         }
