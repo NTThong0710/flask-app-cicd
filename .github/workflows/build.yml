@@ -63,7 +63,7 @@ jobs:
   build-and-push:
     needs: test-and-sonar
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/master'
     
     outputs:
       image-tag: ${{ steps.meta.outputs.tags }}
@@ -109,7 +109,7 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/master'
     
     steps:
     - name: Deploy to EC2
