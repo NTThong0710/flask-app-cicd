@@ -98,6 +98,10 @@ def clear_chat_history():
 def faq_questions():
     faq_list = list(responses.keys())  # Lấy các câu hỏi từ từ điển
     return jsonify(faq_list)
+    
+@app.route('/metrics')
+def metrics():
+    return "# Flask app metrics\nflask_app_up 1\n", 200, {'Content-Type': 'text/plain'}
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
