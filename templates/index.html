@@ -110,7 +110,7 @@
                 console.error("Error occurred in recognition: " + event.error);
             };
 
-            recognition.start(); // Bắt đầu nhận diện
+            recognition.start();
         }
         async function clearChatHistory() {
             await fetch("/clear_history", {
