@@ -108,7 +108,7 @@ jobs:
                 fi
 
 sonarcloud:
-    name: SonarCloud
+    name: SonarCloud analysis
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
