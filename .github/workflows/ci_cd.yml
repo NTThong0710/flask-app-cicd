@@ -10,7 +10,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: ntthong0710/flask-app-cicd 
   EC2_IP: 13.229.126.89
 
 jobs:
