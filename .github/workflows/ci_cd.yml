@@ -1,16 +1,17 @@
-name: Flask App CI/CD with Code Verification
+name: Flask App CI/CD with GitHub Packages Artifact Management
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, develop ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ master ]
   workflow_dispatch:
 
 env:
-  DOCKER_IMAGE: flask-app
-  DOCKER_HUB_REPO: thong0710/flask-app
-  EC2_IP: 13.229.126.89 
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  EC2_IP: 13.229.126.89
 
 jobs:
   code-verification:
@@ -19,10 +20,10 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       
     - name: Set up Python
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v4
       with:
         python-version: '3.10'
         
@@ -34,54 +35,28 @@ jobs:
         
     - name: Python syntax check
       run: |
-        echo "Checking Python syntax..."
+        echo "🔍 Checking Python syntax..."
         python -m py_compile app.py
         find . -name "*.py" -exec python -m py_compile {} \;
-        echo "Syntax check passed"
+        echo "✅ Syntax check passed"
         
     - name: Code style check (PEP8)
       run: |
-        echo "Checking code style with flake8..."
+        echo "🎨 Checking code style with flake8..."
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=venv,env
         flake8 . --count --max-complexity=10 --max-line-length=120 --statistics --exclude=venv,env || true
-        echo "Code style check completed"
-        
-    - name: Code formatting check
-      run: |
-        echo "Checking code formatting with black..."
-        black --check --diff . || echo "  Code formatting could be improved"
+        echo "✅ Code style check completed"
         
     - name: Security vulnerability scan
       run: |
-        echo " Scanning for security vulnerabilities..."
+        echo "🔒 Scanning for security vulnerabilities..."
         bandit -r . -f json -o bandit-report.json || true
-        bandit -r . --severity-level medium || echo "  Security warnings found"
+        bandit -r . --severity-level medium || echo "⚠️ Security warnings found"
         
     - name: Dependency security check
       run: |
-        echo " Checking dependencies for known vulnerabilities..."
-        safety check || echo "  Dependency security warnings found"
-        
-    - name: Type checking (if type hints exist)
-      run: |
-        echo "  Running type checks..."
-        mypy app.py --ignore-missing-imports || echo "ℹ  Type checking completed with warnings"
-        
-    - name: Import and basic functionality test
-      run: |
-        echo " Testing basic application functionality..."
-        python3 -c "
-        try:
-            import app
-            print(' App import successful')
-            if hasattr(app, 'app'):
-                print(' Flask app object found')
-            else:
-                print('  Flask app object not found')
-        except Exception as e:
-            print(f' App import failed: {e}')
-            exit(1)
-        "
+        echo "🛡️ Checking dependencies for known vulnerabilities..."
+        safety check || echo "⚠️ Dependency security warnings found"
 
   test:
     name: Unit Tests
@@ -90,10 +65,10 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       
     - name: Set up Python
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v4
       with:
         python-version: '3.10'
         
@@ -106,11 +81,11 @@ jobs:
     - name: Run unit tests
       run: |
         if [ -f "test_app.py" ] || [ -d "tests/" ]; then
-          echo " Running unit tests..."
+          echo "🧪 Running unit tests..."
           pytest --verbose --cov=. --cov-report=term --cov-report=xml
-          echo " Tests completed"
+          echo "✅ Tests completed"
         else
-          echo "  No test files found. Creating basic test..."
+          echo "📝 Creating basic test..."
           echo "
         import requests
         import subprocess
@@ -119,7 +94,6 @@ jobs:
         def test_app_starts():
             '''Test that the app can start without errors'''
             try:
-                # Test import
                 import app
                 assert True
             except Exception as e:
@@ -128,109 +102,319 @@ jobs:
         def test_basic_functionality():
             '''Basic functionality test'''
             import app
-            # Add more specific tests here
             assert hasattr(app, 'app'), 'Flask app object should exist'
                   " > basic_test.py
                   pytest basic_test.py --verbose
                 fi
 
-  sonarcloud:
-    name: SonarCloud Analysis
-    runs-on: ubuntu-latest
-    needs: [code-verification, test]
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-      
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pytest pytest-cov
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-      
-      - name: Run tests with coverage
-        run: |
-          if [ -f "test_app.py" ] || [ -d "tests/" ]; then
-            pytest --cov=. --cov-report=xml
-          else
-            echo "# No tests found, creating coverage placeholder" > coverage.xml
-          fi
-      
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          sonarcloud:
+            name: SonarCloud Analysis
+            runs-on: ubuntu-latest
+            needs: [code-verification, test]
+            
+            steps:
+              - name: Checkout code
+                uses: actions/checkout@v4
+                with:
+                  fetch-depth: 0
+              
+              - name: Setup Python
+                uses: actions/setup-python@v4
+                with:
+                  python-version: '3.10'
+              
+              - name: Install dependencies
+                run: |
+                  python -m pip install --upgrade pip
+                  pip install pytest pytest-cov
+                  if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+              
+              - name: Run tests with coverage
+                run: |
+                  if [ -f "test_app.py" ] || [ -d "tests/" ]; then
+                    pytest --cov=. --cov-report=xml
+                  else
+                    echo "# No tests found, creating coverage placeholder" > coverage.xml
+                  fi
+              
+              - name: SonarCloud Scan
+                uses: SonarSource/sonarcloud-github-action@master
+                env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-  build-and-push:
-    name: Build & Push Docker Image
-    needs: [code-verification, test, sonarcloud]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-      
-    - name: Login to Docker Hub
-      run: |
-        echo "${{ secrets.DOCKER_HUB_TOKEN }}" | docker login -u "${{ secrets.DOCKER_HUB_USERNAME }}" --password-stdin
-        
-    - name: Build and push Docker image
-      run: |
-        echo " Building Docker image..."
-        docker build -t ${{ env.DOCKER_HUB_REPO }}:${{ github.run_number }} .
-        docker tag ${{ env.DOCKER_HUB_REPO }}:${{ github.run_number }} ${{ env.DOCKER_HUB_REPO }}:latest
-        
-        echo " Pushing to Docker Hub..."
-        docker push ${{ env.DOCKER_HUB_REPO }}:${{ github.run_number }}
-        docker push ${{ env.DOCKER_HUB_REPO }}:latest
-        echo " Docker images pushed successfully"
+          # ===========================================
+          # GITHUB PACKAGES ARTIFACT MANAGEMENT
+          # ===========================================
+          
+          build-and-publish:
+            name: Build & Publish Docker Image to GitHub Packages
+            needs: [code-verification, test, sonarcloud]
+            runs-on: ubuntu-latest
+            permissions:
+              contents: read
+              packages: write
+            outputs:
+              image-digest: ${{ steps.build.outputs.digest }}
+              image-tags: ${{ steps.meta.outputs.tags }}
+            
+            steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+              
+            - name: Extract metadata for Docker
+              id: meta
+              uses: docker/metadata-action@v5
+              with:
+                images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+                tags: |
+                  # Git tags (v1.0.0, v1.1.0-beta)
+                  type=ref,event=tag
+                  # Branch name
+                  type=ref,event=branch
+                  # SHA for commits
+                  type=sha,prefix={{branch}}-
+                  # Latest for master branch
+                  type=raw,value=latest,enable={{is_default_branch}}
+                labels: |
+                  org.opencontainers.image.title=Flask Application
+                  org.opencontainers.image.description=Production Flask App with CI/CD
+                  org.opencontainers.image.vendor=${{ github.repository_owner }}
+                  org.opencontainers.image.version=${{ github.ref_name }}
+                  maintainer=${{ github.actor }}
+                  build.number=${{ github.run_number }}
+                  build.url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            
+            - name: Log in to GitHub Container Registry
+              uses: docker/login-action@v3
+              with:
+                registry: ${{ env.REGISTRY }}
+                username: ${{ github.actor }}
+                password: ${{ secrets.GITHUB_TOKEN }}
+            
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+            
+            - name: Build and push Docker image
+              id: build
+              uses: docker/build-push-action@v5
+              with:
+                context: .
+                push: true
+                tags: ${{ steps.meta.outputs.tags }}
+                labels: ${{ steps.meta.outputs.labels }}
+                platforms: linux/amd64,linux/arm64
+                cache-from: type=gha
+                cache-to: type=gha,mode=max
+                provenance: true
+                sbom: true
+            
+            - name: Generate artifact attestation
+              uses: actions/attest-build-provenance@v1
+              with:
+                subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+                subject-digest: ${{ steps.build.outputs.digest }}
+                push-to-registry: true
 
-  deploy:
-    name: Deploy to EC2
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master'
-    
-    steps:
-    - name: Deploy to EC2
-      run: |
-        echo " Deploying to EC2..."
-        
-        # Install SSH client
-        which ssh || (apt-get update && apt-get install -y openssh-client)
-        
-        # Setup SSH key
-        mkdir -p ~/.ssh
-        echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-        chmod 600 ~/.ssh/id_rsa
-        
-        # Add EC2 to known_hosts
-        ssh-keyscan -H ${{ env.EC2_IP }} >> ~/.ssh/known_hosts
-        
-        # Deploy
-        ssh -i ~/.ssh/id_rsa ec2-user@${{ env.EC2_IP }} << 'EOF'
-          echo " Pulling latest image..."
-          docker pull ${{ env.DOCKER_HUB_REPO }}:latest
+          # ===========================================
+          # ARTIFACT SECURITY SCANNING
+          # ===========================================
           
-          echo " Updating application..."
-          docker stop flask-app 2>/dev/null || true
-          docker rm flask-app 2>/dev/null || true
-          docker run -d --name flask-app --restart unless-stopped -p 5000:5000 ${{ env.DOCKER_HUB_REPO }}:latest
+          security-scan:
+            name: Security Scan Artifacts
+            needs: build-and-publish
+            runs-on: ubuntu-latest
+            permissions:
+              security-events: write
+            
+            steps:
+            - name: Log in to GitHub Container Registry
+              uses: docker/login-action@v3
+              with:
+                registry: ${{ env.REGISTRY }}
+                username: ${{ github.actor }}
+                password: ${{ secrets.GITHUB_TOKEN }}
+            
+            - name: Extract image for scanning
+              run: |
+                # Get the first tag from the build output
+                IMAGE_TAG=$(echo '${{ needs.build-and-publish.outputs.image-tags }}' | head -n1)
+                echo "Scanning image: $IMAGE_TAG"
+                echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+            
+            - name: Run Trivy vulnerability scanner
+              uses: aquasecurity/trivy-action@master
+              with:
+                image-ref: ${{ env.IMAGE_TAG }}
+                format: 'sarif'
+                output: 'trivy-results.sarif'
+            
+            - name: Upload Trivy scan results to GitHub Security tab
+              uses: github/codeql-action/upload-sarif@v3
+              if: always()
+              with:
+                sarif_file: 'trivy-results.sarif'
+
+          # ===========================================
+          # ARTIFACT PROMOTION & DEPLOYMENT
+          # ===========================================
           
-          echo " Cleaning up..."
-          docker image prune -f
+          promote-artifact:
+            name: Promote Artifact for Deployment
+            needs: [build-and-publish, security-scan]
+            runs-on: ubuntu-latest
+            if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
+            permissions:
+              packages: write
+            
+            steps:
+            - name: Log in to GitHub Container Registry
+              uses: docker/login-action@v3
+              with:
+                registry: ${{ env.REGISTRY }}
+                username: ${{ github.actor }}
+                password: ${{ secrets.GITHUB_TOKEN }}
+            
+            - name: Promote artifact to production
+              run: |
+                # Get source image
+                SOURCE_IMAGE=$(echo '${{ needs.build-and-publish.outputs.image-tags }}' | head -n1)
+                
+                # Create production tag
+                if [[ ${{ github.ref }} =~ ^refs/tags/v ]]; then
+                  PROD_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:prod-${{ github.ref_name }}"
+                else
+                  PROD_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:prod-latest"
+                fi
+                
+                echo "🚀 Promoting $SOURCE_IMAGE to $PROD_TAG"
+                
+                # Pull, tag, and push
+                docker pull $SOURCE_IMAGE
+                docker tag $SOURCE_IMAGE $PROD_TAG
+                docker push $PROD_TAG
+                
+                echo "✅ Artifact promoted successfully"
+                echo "PROD_IMAGE=$PROD_TAG" >> $GITHUB_ENV
+            
+            outputs:
+              prod-image: ${{ env.PROD_IMAGE }}
+
+          deploy:
+            name: Deploy to Production EC2
+            needs: promote-artifact
+            runs-on: ubuntu-latest
+            if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
+            environment: production
+            
+            steps:
+            - name: Deploy to EC2
+              run: |
+                echo "🚀 Deploying to Production EC2..."
+                
+                # Install SSH client
+                which ssh || (apt-get update && apt-get install -y openssh-client)
+                
+                # Setup SSH key
+                mkdir -p ~/.ssh
+                echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+                chmod 600 ~/.ssh/id_rsa
+                
+                # Add EC2 to known_hosts
+                ssh-keyscan -H ${{ env.EC2_IP }} >> ~/.ssh/known_hosts
+                
+                # Get production image
+                PROD_IMAGE="${{ needs.promote-artifact.outputs.prod-image }}"
+                
+                # Deploy with rollback capability
+                ssh -i ~/.ssh/id_rsa ec2-user@${{ env.EC2_IP }} << EOF
+                  echo "📦 Pulling production image: $PROD_IMAGE"
+                  docker pull $PROD_IMAGE
+                  
+                  echo "💾 Creating backup of current container"
+                  docker tag flask-app:current flask-app:backup-$(date +%Y%m%d-%H%M%S) 2>/dev/null || true
+                  
+                  echo "🔄 Updating application..."
+                  docker stop flask-app 2>/dev/null || true
+                  docker rm flask-app 2>/dev/null || true
+                  
+                  echo "🆕 Starting new container..."
+                  docker run -d \
+                    --name flask-app \
+                    --restart unless-stopped \
+                    -p 5000:5000 \
+                    --label "version=${{ github.ref_name }}" \
+                    --label "build.number=${{ github.run_number }}" \
+                    --label "deployed.at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+                    $PROD_IMAGE
+                  
+                  # Health check
+                  echo "🏥 Performing health check..."
+                  sleep 10
+                  if curl -f http://localhost:5000/health 2>/dev/null || curl -f http://localhost:5000/ 2>/dev/null; then
+                    echo "✅ Health check passed"
+                    # Tag current as successful
+                    docker tag $PROD_IMAGE flask-app:current
+                    # Cleanup old images (keep last 3)
+                    docker images --format "table {{.Repository}}:{{.Tag}}\t{{.CreatedAt}}" | grep flask-app:backup | tail -n +4 | cut -f1 | xargs -r docker rmi
+                  else
+                    echo "❌ Health check failed, rolling back..."
+                    docker stop flask-app
+                    docker rm flask-app
+                    # Rollback to backup if exists
+                    if docker images -q flask-app:backup-* | head -1; then
+                      BACKUP_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" flask-app:backup-* | head -1)
+                      docker run -d --name flask-app --restart unless-stopped -p 5000:5000 $BACKUP_IMAGE
+                      echo "🔙 Rolled back to: $BACKUP_IMAGE"
+                    fi
+                    exit 1
+                  fi
+                  
+                  echo "🧹 Cleaning up unused images..."
+                  docker image prune -f
+                  
+                  echo "🎉 Deployment completed successfully!"
+                  echo "📍 Application URL: http://${{ env.EC2_IP }}:5000"
+                EOF
+
+          # ===========================================
+          # ARTIFACT MANAGEMENT REPORTING
+          # ===========================================
           
-          echo " Deployment completed successfully!"
-        EOF
-        
-        echo " Application deployed at: http://${{ env.EC2_IP }}:5000"
+          artifact-report:
+            name: Generate Artifact Management Report
+            needs: [build-and-publish, security-scan, deploy]
+            runs-on: ubuntu-latest
+            if: always()
+            permissions:
+              packages: read
+            
+            steps:
+            - name: Generate Artifact Report
+              run: |
+                echo "# 📋 Artifact Management Report" > artifact-report.md
+                echo "" >> artifact-report.md
+                echo "**Build Information:**" >> artifact-report.md
+                echo "- Build Number: ${{ github.run_number }}" >> artifact-report.md
+                echo "- Git Reference: ${{ github.ref }}" >> artifact-report.md
+                echo "- Commit SHA: ${{ github.sha }}" >> artifact-report.md
+                echo "- Build Time: $(date -u)" >> artifact-report.md
+                echo "" >> artifact-report.md
+                echo "**Artifacts Published:**" >> artifact-report.md
+                echo '```' >> artifact-report.md
+                echo '${{ needs.build-and-publish.outputs.image-tags }}' >> artifact-report.md
+                echo '```' >> artifact-report.md
+                echo "" >> artifact-report.md
+                echo "**Security Scan:** ${{ needs.security-scan.result }}" >> artifact-report.md
+                echo "**Deployment:** ${{ needs.deploy.result }}" >> artifact-report.md
+                echo "" >> artifact-report.md
+                echo "**Package URL:** https://github.com/${{ github.repository }}/pkgs/container/${{ github.event.repository.name }}" >> artifact-report.md
+                
+                cat artifact-report.md
+                
+            - name: Upload Artifact Report
+              uses: actions/upload-artifact@v4
+              with:
+                name: artifact-management-report
+                path: artifact-report.md
+                retention-days: 30

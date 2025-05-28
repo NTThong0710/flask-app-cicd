@@ -23,7 +23,7 @@ def client():
 
 def test_index_route(client):
     """Test the main page loads correctly"""
-    response = client.get('/error')
+    response = client.get('/')
     assert response.status_code == 200
     assert b'html' in response.data.lower()  # Should return HTML content
 
