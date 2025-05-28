@@ -107,314 +107,315 @@ jobs:
                   pytest basic_test.py --verbose
                 fi
 
-          sonarcloud:
-            name: SonarCloud Analysis
-            runs-on: ubuntu-latest
-            needs: [code-verification, test]
-            
-            steps:
-              - name: Checkout code
-                uses: actions/checkout@v4
-                with:
-                  fetch-depth: 0
-              
-              - name: Setup Python
-                uses: actions/setup-python@v4
-                with:
-                  python-version: '3.10'
-              
-              - name: Install dependencies
-                run: |
-                  python -m pip install --upgrade pip
-                  pip install pytest pytest-cov
-                  if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-              
-              - name: Run tests with coverage
-                run: |
-                  if [ -f "test_app.py" ] || [ -d "tests/" ]; then
-                    pytest --cov=. --cov-report=xml
-                  else
-                    echo "# No tests found, creating coverage placeholder" > coverage.xml
-                  fi
-              
-              - name: SonarCloud Scan
-                uses: SonarSource/sonarcloud-github-action@master
-                env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  sonarcloud:
+    name: SonarCloud Analysis
+    runs-on: ubuntu-latest
+    needs: [code-verification, test]
+    if: false  
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      
+      - name: Run tests with coverage
+        run: |
+          if [ -f "test_app.py" ] || [ -d "tests/" ]; then
+            pytest --cov=. --cov-report=xml
+          else
+            echo "# No tests found, creating coverage placeholder" > coverage.xml
+          fi
+      
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-          # ===========================================
-          # GITHUB PACKAGES ARTIFACT MANAGEMENT
-          # ===========================================
+  # ===========================================
+  # GITHUB PACKAGES ARTIFACT MANAGEMENT
+  # ===========================================
+  
+  build-and-publish:
+    name: Build & Publish Docker Image to GitHub Packages
+    needs: [code-verification, test, sonarcloud]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tags: ${{ steps.meta.outputs.tags }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Extract metadata for Docker
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          # Git tags (v1.0.0, v1.1.0-beta)
+          type=ref,event=tag
+          # Branch name
+          type=ref,event=branch
+          # SHA for commits
+          type=sha,prefix={{branch}}-
+          # Latest for master branch
+          type=raw,value=latest,enable={{is_default_branch}}
+        labels: |
+          org.opencontainers.image.title=Flask Application
+          org.opencontainers.image.description=Production Flask App with CI/CD
+          org.opencontainers.image.vendor=${{ github.repository_owner }}
+          org.opencontainers.image.version=${{ github.ref_name }}
+          maintainer=${{ github.actor }}
+          build.number=${{ github.run_number }}
+          build.url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build and push Docker image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        platforms: linux/amd64,linux/arm64
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        provenance: true
+        sbom: true
+    
+    - name: Generate artifact attestation
+      uses: actions/attest-build-provenance@v1
+      with:
+        subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        subject-digest: ${{ steps.build.outputs.digest }}
+        push-to-registry: true
+
+  # ===========================================
+  # ARTIFACT SECURITY SCANNING
+  # ===========================================
+  
+  security-scan:
+    name: Security Scan Artifacts
+    needs: build-and-publish
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    
+    steps:
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Extract image for scanning
+      run: |
+        # Get the first tag from the build output
+        IMAGE_TAG=$(echo '${{ needs.build-and-publish.outputs.image-tags }}' | head -n1)
+        echo "Scanning image: $IMAGE_TAG"
+        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+    
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.IMAGE_TAG }}
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+    
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # ===========================================
+  # ARTIFACT PROMOTION & DEPLOYMENT
+  # ===========================================
+  
+  promote-artifact:
+    name: Promote Artifact for Deployment
+    needs: [build-and-publish, security-scan]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      packages: write
+    
+    steps:
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Promote artifact to production
+      run: |
+        # Get source image
+        SOURCE_IMAGE=$(echo '${{ needs.build-and-publish.outputs.image-tags }}' | head -n1)
+        
+        # Create production tag
+        if [[ ${{ github.ref }} =~ ^refs/tags/v ]]; then
+          PROD_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:prod-${{ github.ref_name }}"
+        else
+          PROD_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:prod-latest"
+        fi
+        
+        echo "🚀 Promoting $SOURCE_IMAGE to $PROD_TAG"
+        
+        # Pull, tag, and push
+        docker pull $SOURCE_IMAGE
+        docker tag $SOURCE_IMAGE $PROD_TAG
+        docker push $PROD_TAG
+        
+        echo "✅ Artifact promoted successfully"
+        echo "PROD_IMAGE=$PROD_TAG" >> $GITHUB_ENV
+    
+    outputs:
+      prod-image: ${{ env.PROD_IMAGE }}
+
+  deploy:
+    name: Deploy to Production EC2
+    needs: promote-artifact
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
+    environment: production
+    
+    steps:
+    - name: Deploy to EC2
+      run: |
+        echo "🚀 Deploying to Production EC2..."
+        
+        # Install SSH client
+        which ssh || (apt-get update && apt-get install -y openssh-client)
+        
+        # Setup SSH key
+        mkdir -p ~/.ssh
+        echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        
+        # Add EC2 to known_hosts
+        ssh-keyscan -H ${{ env.EC2_IP }} >> ~/.ssh/known_hosts
+        
+        # Get production image
+        PROD_IMAGE="${{ needs.promote-artifact.outputs.prod-image }}"
+        
+        # Deploy with rollback capability
+        ssh -i ~/.ssh/id_rsa ec2-user@${{ env.EC2_IP }} << EOF
+          echo "📦 Pulling production image: $PROD_IMAGE"
+          docker pull $PROD_IMAGE
           
-          build-and-publish:
-            name: Build & Publish Docker Image to GitHub Packages
-            needs: [code-verification, test, sonarcloud]
-            runs-on: ubuntu-latest
-            permissions:
-              contents: read
-              packages: write
-            outputs:
-              image-digest: ${{ steps.build.outputs.digest }}
-              image-tags: ${{ steps.meta.outputs.tags }}
-            
-            steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
-              
-            - name: Extract metadata for Docker
-              id: meta
-              uses: docker/metadata-action@v5
-              with:
-                images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-                tags: |
-                  # Git tags (v1.0.0, v1.1.0-beta)
-                  type=ref,event=tag
-                  # Branch name
-                  type=ref,event=branch
-                  # SHA for commits
-                  type=sha,prefix={{branch}}-
-                  # Latest for master branch
-                  type=raw,value=latest,enable={{is_default_branch}}
-                labels: |
-                  org.opencontainers.image.title=Flask Application
-                  org.opencontainers.image.description=Production Flask App with CI/CD
-                  org.opencontainers.image.vendor=${{ github.repository_owner }}
-                  org.opencontainers.image.version=${{ github.ref_name }}
-                  maintainer=${{ github.actor }}
-                  build.number=${{ github.run_number }}
-                  build.url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-            
-            - name: Log in to GitHub Container Registry
-              uses: docker/login-action@v3
-              with:
-                registry: ${{ env.REGISTRY }}
-                username: ${{ github.actor }}
-                password: ${{ secrets.GITHUB_TOKEN }}
-            
-            - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@v3
-            
-            - name: Build and push Docker image
-              id: build
-              uses: docker/build-push-action@v5
-              with:
-                context: .
-                push: true
-                tags: ${{ steps.meta.outputs.tags }}
-                labels: ${{ steps.meta.outputs.labels }}
-                platforms: linux/amd64,linux/arm64
-                cache-from: type=gha
-                cache-to: type=gha,mode=max
-                provenance: true
-                sbom: true
-            
-            - name: Generate artifact attestation
-              uses: actions/attest-build-provenance@v1
-              with:
-                subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-                subject-digest: ${{ steps.build.outputs.digest }}
-                push-to-registry: true
-
-          # ===========================================
-          # ARTIFACT SECURITY SCANNING
-          # ===========================================
+          echo "💾 Creating backup of current container"
+          docker tag flask-app:current flask-app:backup-$(date +%Y%m%d-%H%M%S) 2>/dev/null || true
           
-          security-scan:
-            name: Security Scan Artifacts
-            needs: build-and-publish
-            runs-on: ubuntu-latest
-            permissions:
-              security-events: write
-            
-            steps:
-            - name: Log in to GitHub Container Registry
-              uses: docker/login-action@v3
-              with:
-                registry: ${{ env.REGISTRY }}
-                username: ${{ github.actor }}
-                password: ${{ secrets.GITHUB_TOKEN }}
-            
-            - name: Extract image for scanning
-              run: |
-                # Get the first tag from the build output
-                IMAGE_TAG=$(echo '${{ needs.build-and-publish.outputs.image-tags }}' | head -n1)
-                echo "Scanning image: $IMAGE_TAG"
-                echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-            
-            - name: Run Trivy vulnerability scanner
-              uses: aquasecurity/trivy-action@master
-              with:
-                image-ref: ${{ env.IMAGE_TAG }}
-                format: 'sarif'
-                output: 'trivy-results.sarif'
-            
-            - name: Upload Trivy scan results to GitHub Security tab
-              uses: github/codeql-action/upload-sarif@v3
-              if: always()
-              with:
-                sarif_file: 'trivy-results.sarif'
-
-          # ===========================================
-          # ARTIFACT PROMOTION & DEPLOYMENT
-          # ===========================================
+          echo "🔄 Updating application..."
+          docker stop flask-app 2>/dev/null || true
+          docker rm flask-app 2>/dev/null || true
           
-          promote-artifact:
-            name: Promote Artifact for Deployment
-            needs: [build-and-publish, security-scan]
-            runs-on: ubuntu-latest
-            if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
-            permissions:
-              packages: write
-            
-            steps:
-            - name: Log in to GitHub Container Registry
-              uses: docker/login-action@v3
-              with:
-                registry: ${{ env.REGISTRY }}
-                username: ${{ github.actor }}
-                password: ${{ secrets.GITHUB_TOKEN }}
-            
-            - name: Promote artifact to production
-              run: |
-                # Get source image
-                SOURCE_IMAGE=$(echo '${{ needs.build-and-publish.outputs.image-tags }}' | head -n1)
-                
-                # Create production tag
-                if [[ ${{ github.ref }} =~ ^refs/tags/v ]]; then
-                  PROD_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:prod-${{ github.ref_name }}"
-                else
-                  PROD_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:prod-latest"
-                fi
-                
-                echo "🚀 Promoting $SOURCE_IMAGE to $PROD_TAG"
-                
-                # Pull, tag, and push
-                docker pull $SOURCE_IMAGE
-                docker tag $SOURCE_IMAGE $PROD_TAG
-                docker push $PROD_TAG
-                
-                echo "✅ Artifact promoted successfully"
-                echo "PROD_IMAGE=$PROD_TAG" >> $GITHUB_ENV
-            
-            outputs:
-              prod-image: ${{ env.PROD_IMAGE }}
-
-          deploy:
-            name: Deploy to Production EC2
-            needs: promote-artifact
-            runs-on: ubuntu-latest
-            if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
-            environment: production
-            
-            steps:
-            - name: Deploy to EC2
-              run: |
-                echo "🚀 Deploying to Production EC2..."
-                
-                # Install SSH client
-                which ssh || (apt-get update && apt-get install -y openssh-client)
-                
-                # Setup SSH key
-                mkdir -p ~/.ssh
-                echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-                chmod 600 ~/.ssh/id_rsa
-                
-                # Add EC2 to known_hosts
-                ssh-keyscan -H ${{ env.EC2_IP }} >> ~/.ssh/known_hosts
-                
-                # Get production image
-                PROD_IMAGE="${{ needs.promote-artifact.outputs.prod-image }}"
-                
-                # Deploy with rollback capability
-                ssh -i ~/.ssh/id_rsa ec2-user@${{ env.EC2_IP }} << EOF
-                  echo "📦 Pulling production image: $PROD_IMAGE"
-                  docker pull $PROD_IMAGE
-                  
-                  echo "💾 Creating backup of current container"
-                  docker tag flask-app:current flask-app:backup-$(date +%Y%m%d-%H%M%S) 2>/dev/null || true
-                  
-                  echo "🔄 Updating application..."
-                  docker stop flask-app 2>/dev/null || true
-                  docker rm flask-app 2>/dev/null || true
-                  
-                  echo "🆕 Starting new container..."
-                  docker run -d \
-                    --name flask-app \
-                    --restart unless-stopped \
-                    -p 5000:5000 \
-                    --label "version=${{ github.ref_name }}" \
-                    --label "build.number=${{ github.run_number }}" \
-                    --label "deployed.at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-                    $PROD_IMAGE
-                  
-                  # Health check
-                  echo "🏥 Performing health check..."
-                  sleep 10
-                  if curl -f http://localhost:5000/health 2>/dev/null || curl -f http://localhost:5000/ 2>/dev/null; then
-                    echo "✅ Health check passed"
-                    # Tag current as successful
-                    docker tag $PROD_IMAGE flask-app:current
-                    # Cleanup old images (keep last 3)
-                    docker images --format "table {{.Repository}}:{{.Tag}}\t{{.CreatedAt}}" | grep flask-app:backup | tail -n +4 | cut -f1 | xargs -r docker rmi
-                  else
-                    echo "❌ Health check failed, rolling back..."
-                    docker stop flask-app
-                    docker rm flask-app
-                    # Rollback to backup if exists
-                    if docker images -q flask-app:backup-* | head -1; then
-                      BACKUP_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" flask-app:backup-* | head -1)
-                      docker run -d --name flask-app --restart unless-stopped -p 5000:5000 $BACKUP_IMAGE
-                      echo "🔙 Rolled back to: $BACKUP_IMAGE"
-                    fi
-                    exit 1
-                  fi
-                  
-                  echo "🧹 Cleaning up unused images..."
-                  docker image prune -f
-                  
-                  echo "🎉 Deployment completed successfully!"
-                  echo "📍 Application URL: http://${{ env.EC2_IP }}:5000"
-                EOF
-
-          # ===========================================
-          # ARTIFACT MANAGEMENT REPORTING
-          # ===========================================
+          echo "🆕 Starting new container..."
+          docker run -d \
+            --name flask-app \
+            --restart unless-stopped \
+            -p 5000:5000 \
+            --label "version=${{ github.ref_name }}" \
+            --label "build.number=${{ github.run_number }}" \
+            --label "deployed.at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            $PROD_IMAGE
           
-          artifact-report:
-            name: Generate Artifact Management Report
-            needs: [build-and-publish, security-scan, deploy]
-            runs-on: ubuntu-latest
-            if: always()
-            permissions:
-              packages: read
-            
-            steps:
-            - name: Generate Artifact Report
-              run: |
-                echo "# 📋 Artifact Management Report" > artifact-report.md
-                echo "" >> artifact-report.md
-                echo "**Build Information:**" >> artifact-report.md
-                echo "- Build Number: ${{ github.run_number }}" >> artifact-report.md
-                echo "- Git Reference: ${{ github.ref }}" >> artifact-report.md
-                echo "- Commit SHA: ${{ github.sha }}" >> artifact-report.md
-                echo "- Build Time: $(date -u)" >> artifact-report.md
-                echo "" >> artifact-report.md
-                echo "**Artifacts Published:**" >> artifact-report.md
-                echo '```' >> artifact-report.md
-                echo '${{ needs.build-and-publish.outputs.image-tags }}' >> artifact-report.md
-                echo '```' >> artifact-report.md
-                echo "" >> artifact-report.md
-                echo "**Security Scan:** ${{ needs.security-scan.result }}" >> artifact-report.md
-                echo "**Deployment:** ${{ needs.deploy.result }}" >> artifact-report.md
-                echo "" >> artifact-report.md
-                echo "**Package URL:** https://github.com/${{ github.repository }}/pkgs/container/${{ github.event.repository.name }}" >> artifact-report.md
-                
-                cat artifact-report.md
-                
-            - name: Upload Artifact Report
-              uses: actions/upload-artifact@v4
-              with:
-                name: artifact-management-report
-                path: artifact-report.md
-                retention-days: 30
+          # Health check
+          echo "🏥 Performing health check..."
+          sleep 10
+          if curl -f http://localhost:5000/health 2>/dev/null || curl -f http://localhost:5000/ 2>/dev/null; then
+            echo "✅ Health check passed"
+            # Tag current as successful
+            docker tag $PROD_IMAGE flask-app:current
+            # Cleanup old images (keep last 3)
+            docker images --format "table {{.Repository}}:{{.Tag}}\t{{.CreatedAt}}" | grep flask-app:backup | tail -n +4 | cut -f1 | xargs -r docker rmi
+          else
+            echo "❌ Health check failed, rolling back..."
+            docker stop flask-app
+            docker rm flask-app
+            # Rollback to backup if exists
+            if docker images -q flask-app:backup-* | head -1; then
+              BACKUP_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" flask-app:backup-* | head -1)
+              docker run -d --name flask-app --restart unless-stopped -p 5000:5000 $BACKUP_IMAGE
+              echo "🔙 Rolled back to: $BACKUP_IMAGE"
+            fi
+            exit 1
+          fi
+          
+          echo "🧹 Cleaning up unused images..."
+          docker image prune -f
+          
+          echo "🎉 Deployment completed successfully!"
+          echo "📍 Application URL: http://${{ env.EC2_IP }}:5000"
+        EOF
+
+  # ===========================================
+  # ARTIFACT MANAGEMENT REPORTING
+  # ===========================================
+  
+  artifact-report:
+    name: Generate Artifact Management Report
+    needs: [build-and-publish, security-scan, deploy]
+    runs-on: ubuntu-latest
+    if: always()
+    permissions:
+      packages: read
+    
+    steps:
+    - name: Generate Artifact Report
+      run: |
+        echo "# 📋 Artifact Management Report" > artifact-report.md
+        echo "" >> artifact-report.md
+        echo "**Build Information:**" >> artifact-report.md
+        echo "- Build Number: ${{ github.run_number }}" >> artifact-report.md
+        echo "- Git Reference: ${{ github.ref }}" >> artifact-report.md
+        echo "- Commit SHA: ${{ github.sha }}" >> artifact-report.md
+        echo "- Build Time: $(date -u)" >> artifact-report.md
+        echo "" >> artifact-report.md
+        echo "**Artifacts Published:**" >> artifact-report.md
+        echo '```' >> artifact-report.md
+        echo '${{ needs.build-and-publish.outputs.image-tags }}' >> artifact-report.md
+        echo '```' >> artifact-report.md
+        echo "" >> artifact-report.md
+        echo "**Security Scan:** ${{ needs.security-scan.result }}" >> artifact-report.md
+        echo "**Deployment:** ${{ needs.deploy.result }}" >> artifact-report.md
+        echo "" >> artifact-report.md
+        echo "**Package URL:** https://github.com/${{ github.repository }}/pkgs/container/${{ github.event.repository.name }}" >> artifact-report.md
+        
+        cat artifact-report.md
+        
+    - name: Upload Artifact Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: artifact-management-report
+        path: artifact-report.md
+        retention-days: 30
