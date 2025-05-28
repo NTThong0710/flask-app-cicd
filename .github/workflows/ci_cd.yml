@@ -166,7 +166,7 @@ jobs:
           # Branch name
           type=ref,event=branch
           # SHA for commits
-          type=sha,prefix={{branch}}-
+          type=sha,prefix=sha-
           # Latest for master branch
           type=raw,value=latest,enable={{is_default_branch}}
         labels: |
