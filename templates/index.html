@@ -103,7 +103,7 @@
             recognition.onresult = function(event) {
                 const userInput = document.getElementById("userInput");
                 userInput.value = event.results[0][0].transcript; // Gán giá trị từ nhận diện giọng nói
-                sendMessage(); // Gửi tin nhắn sau khi nhận diện
+                sendMessage();
             };
 
             recognition.onerror = function(event) {
