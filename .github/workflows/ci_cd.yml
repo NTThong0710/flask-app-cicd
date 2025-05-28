@@ -108,9 +108,9 @@ jobs:
                 fi
 
 sonarcloud:
-    name: SonarCloud analysis
-    runs-on: ubuntu-latest
-    steps:
+  name: SonarCloud analysis
+  runs-on: ubuntu-latest
+  steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Quan trọng để SonarCloud có thể xem các commit trước đó
