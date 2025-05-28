@@ -107,17 +107,13 @@ jobs:
                   pytest basic_test.py --verbose
                 fi
 
-  sonarcloud:
-    name: SonarCloud Analysis
+sonarcloud:
+    name: SonarCloud
     runs-on: ubuntu-latest
-    needs: [code-verification, test]
-    if: false  
-    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # Quan trọng để SonarCloud có thể xem các commit trước đó
       
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -132,11 +128,7 @@ jobs:
       
       - name: Run tests with coverage
         run: |
-          if [ -f "test_app.py" ] || [ -d "tests/" ]; then
-            pytest --cov=. --cov-report=xml
-          else
-            echo "# No tests found, creating coverage placeholder" > coverage.xml
-          fi
+          pytest --cov=. --cov-report=xml
       
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
