@@ -147,6 +147,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
       image-tags: ${{ steps.meta.outputs.tags }}
