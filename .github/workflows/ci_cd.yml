@@ -365,7 +365,7 @@ jobs:
         echo "📦 Deploying image: $ECR_IMAGE_URI"
         
         # Deploy to EC2
-        ssh -i ~/.ssh/id_rsa ec2-user@${{ env.EC2_IP }} << 'EOF'
+        ssh -i ~/.ssh/id_rsa ec2-user@${{ env.EC2_IP }} << EOF
           # Check if AWS CLI is installed
           if ! command -v aws &> /dev/null; then
             echo "📥 Installing AWS CLI..."
@@ -378,6 +378,9 @@ jobs:
           export AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
           export AWS_DEFAULT_REGION="${{ env.AWS_REGION }}"
           
+          # Set the image URI variable
+          ECR_IMAGE_URI="${{ needs.build-and-publish-ecr.outputs.ecr-image-uri }}"
+          
           # Verify AWS credentials
           echo "🔐 Verifying AWS credentials..."
           if ! aws sts get-caller-identity; then
@@ -389,11 +392,11 @@ jobs:
           echo "🔑 Logging into ECR..."
           aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin 762233753584.dkr.ecr.ap-southeast-1.amazonaws.com
           
-          echo "📦 Pulling image from ECR: $ECR_IMAGE_URI"
-          docker pull $ECR_IMAGE_URI
+          echo "📦 Pulling image from ECR: \$ECR_IMAGE_URI"
+          docker pull \$ECR_IMAGE_URI
           
           echo "💾 Creating backup of current container"
-          docker tag flask-app:current flask-app:backup-$(date +%Y%m%d-%H%M%S) 2>/dev/null || true
+          docker tag flask-app:current flask-app:backup-\$(date +%Y%m%d-%H%M%S) 2>/dev/null || true
           
           echo "🔄 Updating application..."
           docker stop flask-app 2>/dev/null || true
@@ -406,9 +409,9 @@ jobs:
             -p 5000:5000 \
             --label "version=${{ github.ref_name }}" \
             --label "build.number=${{ github.run_number }}" \
-            --label "deployed.at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --label "deployed.at=\$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --label "source=aws-ecr" \
-            $ECR_IMAGE_URI
+            \$ECR_IMAGE_URI
           
           # Health check
           echo "🏥 Performing health check..."
@@ -416,7 +419,7 @@ jobs:
           
           if curl -f http://localhost:5000/health 2>/dev/null || curl -f http://localhost:5000/ 2>/dev/null; then
             echo "✅ Health check passed"
-            docker tag $ECR_IMAGE_URI flask-app:current
+            docker tag \$ECR_IMAGE_URI flask-app:current
             
             # Cleanup old backup images (keep last 3)
             docker images --format "table {{.Repository}}:{{.Tag}}\t{{.CreatedAt}}" | grep flask-app:backup | tail -n +4 | cut -f1 | xargs -r docker rmi || true
@@ -426,10 +429,10 @@ jobs:
             docker rm flask-app 2>/dev/null || true
             
             # Rollback to backup if exists
-            BACKUP_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" flask-app:backup-* | head -1)
-            if [ ! -z "$BACKUP_IMAGE" ]; then
-              docker run -d --name flask-app --restart unless-stopped -p 5000:5000 $BACKUP_IMAGE
-              echo "🔙 Rolled back to: $BACKUP_IMAGE"
+            BACKUP_IMAGE=\$(docker images --format "{{.Repository}}:{{.Tag}}" flask-app:backup-* | head -1)
+            if [ ! -z "\$BACKUP_IMAGE" ]; then
+              docker run -d --name flask-app --restart unless-stopped -p 5000:5000 \$BACKUP_IMAGE
+              echo "🔙 Rolled back to: \$BACKUP_IMAGE"
             fi
             exit 1
           fi
@@ -439,7 +442,7 @@ jobs:
           
           echo "🎉 ECR Deployment completed successfully!"
           echo "📍 Application URL: http://${{ env.EC2_IP }}:5000"
-          echo "🏷️ Deployed Image: $ECR_IMAGE_URI"
+          echo "🏷️ Deployed Image: \$ECR_IMAGE_URI"
         EOF
 
   # ===========================================
