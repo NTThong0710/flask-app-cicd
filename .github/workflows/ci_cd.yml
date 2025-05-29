@@ -1,4 +1,4 @@
-name: Flask App CI/CD with GitHub Packages Artifact Management
+name: Flask App CI/CD with GitHub Packages & ECR Artifact Management
 
 on:
   push:
@@ -9,8 +9,15 @@ on:
   workflow_dispatch:
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ntthong0710/flask-app-cicd 
+  # GitHub Packages
+  GITHUB_REGISTRY: ghcr.io
+  GITHUB_IMAGE_NAME: ntthong0710/flask-app-cicd
+  
+  # AWS ECR
+  AWS_REGION: ap-southeast-1
+  ECR_REPOSITORY: flask-app
+  
+  # Deployment
   EC2_IP: 13.229.126.89
 
 jobs:
@@ -113,7 +120,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Quan trọng để SonarCloud có thể xem các commit trước đó
+          fetch-depth: 0
       
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -137,11 +144,11 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   # ===========================================
-  # GITHUB PACKAGES ARTIFACT MANAGEMENT
+  # DUAL ARTIFACT MANAGEMENT - GITHUB PACKAGES
   # ===========================================
   
-  build-and-publish:
-    name: Build & Publish Docker Image to GitHub Packages
+  build-and-publish-github:
+    name: Build & Publish to GitHub Packages
     needs: [code-verification, test, sonarcloud]
     runs-on: ubuntu-latest
     permissions:
@@ -161,15 +168,11 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        images: ${{ env.GITHUB_REGISTRY }}/${{ env.GITHUB_IMAGE_NAME }}
         tags: |
-          # Git tags (v1.0.0, v1.1.0-beta)
           type=ref,event=tag
-          # Branch name
           type=ref,event=branch
-          # SHA for commits
           type=sha,prefix=sha-
-          # Latest for master branch
           type=raw,value=latest,enable={{is_default_branch}}
         labels: |
           org.opencontainers.image.title=Flask Application
@@ -183,14 +186,14 @@ jobs:
     - name: Log in to GitHub Container Registry
       uses: docker/login-action@v3
       with:
-        registry: ${{ env.REGISTRY }}
+        registry: ${{ env.GITHUB_REGISTRY }}
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
     
-    - name: Build and push Docker image
+    - name: Build and push to GitHub Packages
       id: build
       uses: docker/build-push-action@v5
       with:
@@ -198,7 +201,7 @@ jobs:
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-        platforms: linux/amd64,linux/arm64
+        platforms: linux/amd64
         cache-from: type=gha
         cache-to: type=gha,mode=max
         provenance: true
@@ -207,105 +210,179 @@ jobs:
     - name: Generate artifact attestation
       uses: actions/attest-build-provenance@v1
       with:
-        subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        subject-name: ${{ env.GITHUB_REGISTRY }}/${{ env.GITHUB_IMAGE_NAME }}
         subject-digest: ${{ steps.build.outputs.digest }}
         push-to-registry: true
 
   # ===========================================
-  # ARTIFACT SECURITY SCANNING
+  # DUAL ARTIFACT MANAGEMENT - AWS ECR
   # ===========================================
   
-  security-scan:
-    name: Security Scan Artifacts
-    needs: build-and-publish
+  build-and-publish-ecr:
+    name: Build & Push to AWS ECR
+    needs: [code-verification, test, sonarcloud]
     runs-on: ubuntu-latest
-    permissions:
-      security-events: write
+    outputs:
+      ecr-image-uri: ${{ steps.build-ecr.outputs.image-uri }}
+      ecr-image-tag: ${{ steps.build-ecr.outputs.image-tag }}
     
     steps:
-    - name: Log in to GitHub Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Checkout code
+      uses: actions/checkout@v4
     
-    - name: Extract image for scanning
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+    
+    - name: Extract metadata for ECR
+      id: meta-ecr
       run: |
-        # Get the first tag from the build output
-        IMAGE_TAG=$(echo '${{ needs.build-and-publish.outputs.image-tags }}' | head -n1)
-        echo "Scanning image: $IMAGE_TAG"
-        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+        ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY=${{ env.ECR_REPOSITORY }}
+        
+        # Generate tags based on git ref
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/}
+          TAGS="$ECR_REGISTRY/$ECR_REPOSITORY:$VERSION,$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+        elif [[ $GITHUB_REF == refs/heads/master ]]; then
+          TAGS="$ECR_REGISTRY/$ECR_REPOSITORY:latest,$ECR_REGISTRY/$ECR_REPOSITORY:master"
+        else
+          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          TAGS="$ECR_REGISTRY/$ECR_REPOSITORY:$BRANCH_NAME"
+        fi
+        
+        # Add build number tag
+        TAGS="$TAGS,$ECR_REGISTRY/$ECR_REPOSITORY:build-${{ github.run_number }}"
+        
+        echo "tags=$TAGS" >> $GITHUB_OUTPUT
+        echo "registry=$ECR_REGISTRY" >> $GITHUB_OUTPUT
+        echo "repository=$ECR_REPOSITORY" >> $GITHUB_OUTPUT
     
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: ${{ env.IMAGE_TAG }}
-        format: 'sarif'
-        output: 'trivy-results.sarif'
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
     
-    - name: Upload Trivy scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v3
-      if: always()
+    - name: Build and push to ECR
+      id: build-ecr
+      uses: docker/build-push-action@v5
       with:
-        sarif_file: 'trivy-results.sarif'
+        context: .
+        push: true
+        tags: ${{ steps.meta-ecr.outputs.tags }}
+        labels: |
+          org.opencontainers.image.title=Flask Application
+          org.opencontainers.image.description=Production Flask App with CI/CD
+          org.opencontainers.image.vendor=${{ github.repository_owner }}
+          org.opencontainers.image.version=${{ github.ref_name }}
+          maintainer=${{ github.actor }}
+          build.number=${{ github.run_number }}
+          build.url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          deployment.target=aws-ecr
+        platforms: linux/amd64
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Set output variables
+      id: outputs
+      run: |
+        ECR_REGISTRY=${{ steps.meta-ecr.outputs.registry }}
+        ECR_REPOSITORY=${{ steps.meta-ecr.outputs.repository }}
+        
+        # Primary image URI for deployment
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/}
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$VERSION"
+          IMAGE_TAG="$VERSION"
+        else
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          IMAGE_TAG="latest"
+        fi
+        
+        echo "image-uri=$IMAGE_URI" >> $GITHUB_OUTPUT
+        echo "image-tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+        
+        echo "🏗️ Built and pushed to ECR: $IMAGE_URI"
+
+  # ===========================================
+  # ECR SECURITY SCANNING
+  # ===========================================
+  
+  ecr-security-scan:
+    name: ECR Security Scan
+    needs: build-and-publish-ecr
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Run ECR image scan
+      run: |
+        echo "🔍 Starting ECR security scan..."
+        
+        # Start image scan
+        aws ecr start-image-scan \
+          --repository-name ${{ env.ECR_REPOSITORY }} \
+          --image-id imageTag=${{ needs.build-and-publish-ecr.outputs.ecr-image-tag }} \
+          --region ${{ env.AWS_REGION }}
+        
+        echo "⏳ Waiting for scan to complete..."
+        sleep 30
+        
+        # Get scan results
+        SCAN_RESULTS=$(aws ecr describe-image-scan-findings \
+          --repository-name ${{ env.ECR_REPOSITORY }} \
+          --image-id imageTag=${{ needs.build-and-publish-ecr.outputs.ecr-image-tag }} \
+          --region ${{ env.AWS_REGION }} \
+          --output json)
+        
+        echo "📊 Scan Results:"
+        echo "$SCAN_RESULTS" | jq '.imageScanFindingsSummary'
+        
+        # Check for critical vulnerabilities
+        CRITICAL_COUNT=$(echo "$SCAN_RESULTS" | jq -r '.imageScanFindingsSummary.findingCounts.CRITICAL // 0')
+        HIGH_COUNT=$(echo "$SCAN_RESULTS" | jq -r '.imageScanFindingsSummary.findingCounts.HIGH // 0')
+        
+        echo "🚨 Critical vulnerabilities: $CRITICAL_COUNT"
+        echo "⚠️ High vulnerabilities: $HIGH_COUNT"
+        
+        if [ "$CRITICAL_COUNT" -gt 0 ]; then
+          echo "❌ Critical vulnerabilities found! Review required."
+          # Don't fail the build, just warn
+        fi
 
   # ===========================================
   # ARTIFACT PROMOTION & DEPLOYMENT
   # ===========================================
   
-  promote-artifact:
-    name: Promote Artifact for Deployment
-    needs: [build-and-publish, security-scan]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
-    permissions:
-      packages: write
-    
-    steps:
-    - name: Log in to GitHub Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Promote artifact to production
-      run: |
-        # Get source image
-        SOURCE_IMAGE=$(echo '${{ needs.build-and-publish.outputs.image-tags }}' | head -n1)
-        
-        # Create production tag
-        if [[ ${{ github.ref }} =~ ^refs/tags/v ]]; then
-          PROD_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:prod-${{ github.ref_name }}"
-        else
-          PROD_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:prod-latest"
-        fi
-        
-        echo "🚀 Promoting $SOURCE_IMAGE to $PROD_TAG"
-        
-        # Pull, tag, and push
-        docker pull $SOURCE_IMAGE
-        docker tag $SOURCE_IMAGE $PROD_TAG
-        docker push $PROD_TAG
-        
-        echo "✅ Artifact promoted successfully"
-        echo "PROD_IMAGE=$PROD_TAG" >> $GITHUB_ENV
-    
-    outputs:
-      prod-image: ${{ env.PROD_IMAGE }}
-
-  deploy:
-    name: Deploy to Production EC2
-    needs: promote-artifact
+  promote-and-deploy:
+    name: Deploy from ECR to EC2
+    needs: [build-and-publish-ecr, ecr-security-scan]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
     environment: production
     
     steps:
-    - name: Deploy to EC2
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Deploy to EC2 from ECR
       run: |
-        echo "🚀 Deploying to Production EC2..."
+        echo "🚀 Deploying from ECR to Production EC2..."
         
         # Install SSH client
         which ssh || (apt-get update && apt-get install -y openssh-client)
@@ -318,49 +395,60 @@ jobs:
         # Add EC2 to known_hosts
         ssh-keyscan -H ${{ env.EC2_IP }} >> ~/.ssh/known_hosts
         
-        # Get production image
-        PROD_IMAGE="${{ needs.promote-artifact.outputs.prod-image }}"
+        # Get ECR image URI
+        ECR_IMAGE_URI="${{ needs.build-and-publish-ecr.outputs.ecr-image-uri }}"
         
-        # Deploy with rollback capability
+        echo "📦 Deploying image: $ECR_IMAGE_URI"
+        
+        # Deploy to EC2
         ssh -i ~/.ssh/id_rsa ec2-user@${{ env.EC2_IP }} << EOF
-          echo "📦 Pulling production image: $PROD_IMAGE"
-          docker pull $PROD_IMAGE
+          # Configure AWS CLI on EC2 (if not already configured)
+          export AWS_DEFAULT_REGION=${{ env.AWS_REGION }}
+          
+          # Login to ECR
+          aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ needs.build-and-publish-ecr.outputs.ecr-image-uri-base }}
+          
+          echo "📦 Pulling image from ECR: $ECR_IMAGE_URI"
+          docker pull $ECR_IMAGE_URI
           
           echo "💾 Creating backup of current container"
-          docker tag flask-app:current flask-app:backup-$(date +%Y%m%d-%H%M%S) 2>/dev/null || true
+          docker tag flask-app:current flask-app:backup-\$(date +%Y%m%d-%H%M%S) 2>/dev/null || true
           
           echo "🔄 Updating application..."
           docker stop flask-app 2>/dev/null || true
           docker rm flask-app 2>/dev/null || true
           
-          echo "🆕 Starting new container..."
+          echo "🆕 Starting new container from ECR..."
           docker run -d \
             --name flask-app \
             --restart unless-stopped \
             -p 5000:5000 \
             --label "version=${{ github.ref_name }}" \
             --label "build.number=${{ github.run_number }}" \
-            --label "deployed.at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            $PROD_IMAGE
+            --label "deployed.at=\$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --label "source=aws-ecr" \
+            $ECR_IMAGE_URI
           
           # Health check
           echo "🏥 Performing health check..."
-          sleep 10
+          sleep 15
+          
           if curl -f http://localhost:5000/health 2>/dev/null || curl -f http://localhost:5000/ 2>/dev/null; then
             echo "✅ Health check passed"
-            # Tag current as successful
-            docker tag $PROD_IMAGE flask-app:current
-            # Cleanup old images (keep last 3)
-            docker images --format "table {{.Repository}}:{{.Tag}}\t{{.CreatedAt}}" | grep flask-app:backup | tail -n +4 | cut -f1 | xargs -r docker rmi
+            docker tag $ECR_IMAGE_URI flask-app:current
+            
+            # Cleanup old backup images (keep last 3)
+            docker images --format "table {{.Repository}}:{{.Tag}}\t{{.CreatedAt}}" | grep flask-app:backup | tail -n +4 | cut -f1 | xargs -r docker rmi || true
           else
             echo "❌ Health check failed, rolling back..."
-            docker stop flask-app
-            docker rm flask-app
+            docker stop flask-app 2>/dev/null || true
+            docker rm flask-app 2>/dev/null || true
+            
             # Rollback to backup if exists
-            if docker images -q flask-app:backup-* | head -1; then
-              BACKUP_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" flask-app:backup-* | head -1)
-              docker run -d --name flask-app --restart unless-stopped -p 5000:5000 $BACKUP_IMAGE
-              echo "🔙 Rolled back to: $BACKUP_IMAGE"
+            BACKUP_IMAGE=\$(docker images --format "{{.Repository}}:{{.Tag}}" flask-app:backup-* | head -1)
+            if [ ! -z "\$BACKUP_IMAGE" ]; then
+              docker run -d --name flask-app --restart unless-stopped -p 5000:5000 \$BACKUP_IMAGE
+              echo "🔙 Rolled back to: \$BACKUP_IMAGE"
             fi
             exit 1
           fi
@@ -368,8 +456,9 @@ jobs:
           echo "🧹 Cleaning up unused images..."
           docker image prune -f
           
-          echo "🎉 Deployment completed successfully!"
+          echo "🎉 ECR Deployment completed successfully!"
           echo "📍 Application URL: http://${{ env.EC2_IP }}:5000"
+          echo "🏷️ Deployed Image: $ECR_IMAGE_URI"
         EOF
 
   # ===========================================
@@ -377,17 +466,17 @@ jobs:
   # ===========================================
   
   artifact-report:
-    name: Generate Artifact Management Report
-    needs: [build-and-publish, security-scan, deploy]
+    name: Generate Dual Artifact Management Report
+    needs: [build-and-publish-github, build-and-publish-ecr, ecr-security-scan, promote-and-deploy]
     runs-on: ubuntu-latest
     if: always()
     permissions:
       packages: read
     
     steps:
-    - name: Generate Artifact Report
+    - name: Generate Comprehensive Artifact Report
       run: |
-        echo "# 📋 Artifact Management Report" > artifact-report.md
+        echo "# 📋 Dual Artifact Management Report" > artifact-report.md
         echo "" >> artifact-report.md
         echo "**Build Information:**" >> artifact-report.md
         echo "- Build Number: ${{ github.run_number }}" >> artifact-report.md
@@ -395,21 +484,35 @@ jobs:
         echo "- Commit SHA: ${{ github.sha }}" >> artifact-report.md
         echo "- Build Time: $(date -u)" >> artifact-report.md
         echo "" >> artifact-report.md
-        echo "**Artifacts Published:**" >> artifact-report.md
+        
+        echo "## 📦 GitHub Packages Artifacts" >> artifact-report.md
         echo '```' >> artifact-report.md
-        echo '${{ needs.build-and-publish.outputs.image-tags }}' >> artifact-report.md
+        echo '${{ needs.build-and-publish-github.outputs.image-tags }}' >> artifact-report.md
         echo '```' >> artifact-report.md
         echo "" >> artifact-report.md
-        echo "**Security Scan:** ${{ needs.security-scan.result }}" >> artifact-report.md
-        echo "**Deployment:** ${{ needs.deploy.result }}" >> artifact-report.md
+        
+        echo "## 🏗️ AWS ECR Artifacts" >> artifact-report.md
+        echo "- **ECR Image URI:** \`${{ needs.build-and-publish-ecr.outputs.ecr-image-uri }}\`" >> artifact-report.md
+        echo "- **ECR Image Tag:** \`${{ needs.build-and-publish-ecr.outputs.ecr-image-tag }}\`" >> artifact-report.md
         echo "" >> artifact-report.md
-        echo "**Package URL:** https://github.com/${{ github.repository }}/pkgs/container/${{ github.event.repository.name }}" >> artifact-report.md
+        
+        echo "## 📊 Pipeline Results" >> artifact-report.md
+        echo "- **GitHub Packages Build:** ${{ needs.build-and-publish-github.result }}" >> artifact-report.md
+        echo "- **ECR Build:** ${{ needs.build-and-publish-ecr.result }}" >> artifact-report.md
+        echo "- **ECR Security Scan:** ${{ needs.ecr-security-scan.result }}" >> artifact-report.md
+        echo "- **Production Deployment:** ${{ needs.promote-and-deploy.result }}" >> artifact-report.md
+        echo "" >> artifact-report.md
+        
+        echo "## 🔗 Artifact Links" >> artifact-report.md
+        echo "- **GitHub Packages:** https://github.com/${{ github.repository }}/pkgs/container/${{ github.event.repository.name }}" >> artifact-report.md
+        echo "- **AWS ECR Console:** https://${{ env.AWS_REGION }}.console.aws.amazon.com/ecr/repositories/private/${{ env.ECR_REPOSITORY }}" >> artifact-report.md
+        echo "- **Application URL:** http://${{ env.EC2_IP }}:5000" >> artifact-report.md
         
         cat artifact-report.md
         
     - name: Upload Artifact Report
       uses: actions/upload-artifact@v4
       with:
-        name: artifact-management-report
+        name: dual-artifact-management-report
         path: artifact-report.md
         retention-days: 30
