@@ -431,7 +431,7 @@ jobs:
   
   artifact-report:
     name: Generate Dual Artifact Management Report
-    needs: [build-and-publish-github, build-and-publish-ecr, ecr-security-scan, promote-and-deploy]
+    needs: [build-and-publish-github, build-and-publish-ecr, promote-and-deploy]
     runs-on: ubuntu-latest
     if: always()
     permissions:
