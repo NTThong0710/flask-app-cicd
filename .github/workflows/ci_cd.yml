@@ -223,8 +223,8 @@ jobs:
     needs: [code-verification, test, sonarcloud]
     runs-on: ubuntu-latest
     outputs:
-      ecr-image-uri: ${{ steps.build-ecr.outputs.image-uri }}
-      ecr-image-tag: ${{ steps.build-ecr.outputs.image-tag }}
+      ecr-image-uri: ${{ steps.outputs.outputs.image-uri }}
+      ecr-image-tag: ${{ steps.outputs.outputs.image-tag }}
     
     steps:
     - name: Checkout code
@@ -241,29 +241,53 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
     
-    - name: Extract metadata for ECR
-      id: meta-ecr
+    - name: Determine image tag
+      id: tag
+      run: |
+        # Determine image tag based on git reference
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          IMAGE_TAG=${GITHUB_REF#refs/tags/}
+        elif [[ $GITHUB_REF == refs/heads/master ]]; then
+          IMAGE_TAG="latest"
+        elif [[ $GITHUB_REF == refs/heads/* ]]; then
+          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          IMAGE_TAG="${BRANCH_NAME}"
+        else
+          IMAGE_TAG="sha-${GITHUB_SHA::8}"
+        fi
+        
+        echo "image-tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+        echo "🏷️ Determined image tag: $IMAGE_TAG"
+    
+    - name: Build image metadata
+      id: meta
       run: |
         ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY=${{ env.ECR_REPOSITORY }}
+        IMAGE_TAG=${{ steps.tag.outputs.image-tag }}
         
-        # Generate tags based on git ref
-        if [[ $GITHUB_REF == refs/tags/* ]]; then
-          VERSION=${GITHUB_REF#refs/tags/}
-          TAGS="$ECR_REGISTRY/$ECR_REPOSITORY:$VERSION,$ECR_REGISTRY/$ECR_REPOSITORY:latest"
-        elif [[ $GITHUB_REF == refs/heads/master ]]; then
-          TAGS="$ECR_REGISTRY/$ECR_REPOSITORY:latest,$ECR_REGISTRY/$ECR_REPOSITORY:master"
-        else
-          BRANCH_NAME=${GITHUB_REF#refs/heads/}
-          TAGS="$ECR_REGISTRY/$ECR_REPOSITORY:$BRANCH_NAME"
+        # Build full image URI
+        IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+        
+        # Create all tags for this build
+        TAGS="$IMAGE_URI"
+        
+        # Add latest tag for master branch and version tags
+        if [[ "$IMAGE_TAG" == "latest" ]] || [[ "$IMAGE_TAG" =~ ^v[0-9] ]]; then
+          TAGS="$TAGS,$ECR_REGISTRY/$ECR_REPOSITORY:latest"
         fi
         
         # Add build number tag
         TAGS="$TAGS,$ECR_REGISTRY/$ECR_REPOSITORY:build-${{ github.run_number }}"
         
         echo "tags=$TAGS" >> $GITHUB_OUTPUT
+        echo "image-uri=$IMAGE_URI" >> $GITHUB_OUTPUT
         echo "registry=$ECR_REGISTRY" >> $GITHUB_OUTPUT
         echo "repository=$ECR_REPOSITORY" >> $GITHUB_OUTPUT
+        
+        echo "📋 Build metadata:"
+        echo "  Primary Image URI: $IMAGE_URI"
+        echo "  All Tags: $TAGS"
     
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -274,7 +298,7 @@ jobs:
       with:
         context: .
         push: true
-        tags: ${{ steps.meta-ecr.outputs.tags }}
+        tags: ${{ steps.meta.outputs.tags }}
         labels: |
           org.opencontainers.image.title=Flask Application
           org.opencontainers.image.description=Production Flask App with CI/CD
@@ -288,30 +312,18 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
     
-    - name: Set output variables
+    - name: Set job outputs
       id: outputs
       run: |
-        ECR_REGISTRY=${{ steps.meta-ecr.outputs.registry }}
-        ECR_REPOSITORY=${{ steps.meta-ecr.outputs.repository }}
-        
-        # Primary image URI and tag for deployment
-        if [[ $GITHUB_REF == refs/tags/* ]]; then
-          VERSION=${GITHUB_REF#refs/tags/}
-          IMAGE_TAG="$VERSION"
-        elif [[ $GITHUB_REF == refs/heads/master ]]; then
-          IMAGE_TAG="latest"
-        else
-          BRANCH_NAME=${GITHUB_REF#refs/heads/}
-          IMAGE_TAG="$BRANCH_NAME"
-        fi
-        
-        IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+        IMAGE_TAG=${{ steps.tag.outputs.image-tag }}
+        IMAGE_URI=${{ steps.meta.outputs.image-uri }}
         
         echo "image-uri=$IMAGE_URI" >> $GITHUB_OUTPUT
         echo "image-tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
         
-        echo "🏗️ Built and pushed to ECR: $IMAGE_URI"
-        echo "🏷️ Image Tag: $IMAGE_TAG"
+        echo "✅ Job outputs set:"
+        echo "  Image URI: $IMAGE_URI"
+        echo "  Image Tag: $IMAGE_TAG"
 
   # ===========================================
   # ECR SECURITY SCANNING
